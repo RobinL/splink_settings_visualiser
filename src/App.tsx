@@ -1018,6 +1018,9 @@ export function App() {
   const finalWeight = hasCompleteResults
     ? finalMatchWeight(model, successfulResults)
     : null;
+  const untrainedResults = successfulResults.filter(
+    (result) => result.matchWeight === null,
+  );
   const comparisonLevelData = parameterData.filter(
     (datum) => datum.comparison_name !== "probability_two_random_records_match",
   );
@@ -1292,6 +1295,19 @@ export function App() {
               }
               onSetAllNull={setEverythingNull}
             />
+          )}
+          {hasCompleteResults && untrainedResults.length > 0 && (
+            <div className="evaluation-error">
+              <AlertCircle size={18} />
+              <div>
+                <strong>Waterfall unavailable</strong>
+                <span>
+                  The activated level for {untrainedResults
+                    .map((result) => result.comparison.output_column_name)
+                    .join(", ")} has no trained m and u probabilities.
+                </span>
+              </div>
+            </div>
           )}
           {finalWeight !== null && (
             <section className="content-band">

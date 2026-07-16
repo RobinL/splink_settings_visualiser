@@ -245,7 +245,7 @@
         "record_r": {
             "first_name": "John",
             "surname": "Smyth",
-            "dob": "1990-01-02",
+            "dob": null,
             "city": "London",
             "email": "john.smyth@example.com"
         }
