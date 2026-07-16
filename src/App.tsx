@@ -1231,23 +1231,29 @@ export function App() {
               label="Match weights by comparison level"
             />
           </section>
-          <section className="content-band">
-            <div className="section-title">
+          <details className="content-band comparison-widget chart-disclosure">
+            <summary className="comparison-head">
               <div>
                 <p className="eyebrow">Parameter balance</p>
                 <h2>m and u probabilities</h2>
-                <p>
-                  Compare how often each level appears among matches and
-                  non-matches.
-                </p>
               </div>
-              <Activity size={20} />
+              <span className="comparison-expand-hint">
+                (<span className="expand-label">click to expand</span>
+                <span className="collapse-label">click to collapse</span>)
+                <ChevronDown size={17} />
+              </span>
+            </summary>
+            <div className="comparison-content">
+              <p className="chart-disclosure-description">
+                Compare how often each level appears among matches and
+                non-matches.
+              </p>
+              <VegaChart
+                spec={muChart}
+                label="M and U parameters by comparison level"
+              />
             </div>
-            <VegaChart
-              spec={muChart}
-              label="M and U parameters by comparison level"
-            />
-          </section>
+          </details>
         </main>
       }
 
@@ -1311,23 +1317,31 @@ export function App() {
             </div>
           )}
           {finalWeight !== null && (
-            <section className="content-band">
-              <div className="section-title">
+            <details
+              className="content-band comparison-widget chart-disclosure"
+              open
+            >
+              <summary className="comparison-head">
                 <div>
                   <p className="eyebrow">Score composition</p>
                   <h2>Waterfall</h2>
-                  <p>
-                    Each step shows how a comparison changes the cumulative
-                    score.
-                  </p>
                 </div>
-                <Gauge size={20} />
+                <span className="comparison-expand-hint">
+                  (<span className="expand-label">click to expand</span>
+                  <span className="collapse-label">click to collapse</span>)
+                  <ChevronDown size={17} />
+                </span>
+              </summary>
+              <div className="comparison-content">
+                <p className="chart-disclosure-description">
+                  Each step shows how a comparison changes the cumulative score.
+                </p>
+                <VegaChart
+                  spec={waterfallChart}
+                  label="Waterfall of pair match-weight contributions"
+                />
               </div>
-              <VegaChart
-                spec={waterfallChart}
-                label="Waterfall of pair match-weight contributions"
-              />
-            </section>
+            </details>
           )}
           <section className="comparison-section">
             <div className="section-title">

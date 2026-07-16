@@ -34,7 +34,7 @@ interface SplinkMuSpec {
 
 interface SplinkWaterfallSpec {
   data: { values: unknown };
-  params: [{ bind: { max: number } }];
+  params?: unknown;
   transform: unknown[];
 }
 
@@ -214,8 +214,8 @@ export function waterfallData(
 
 export function waterfallSpec(data: WaterfallDatum[]): VisualizationSpec {
   const spec = structuredClone(waterfallTemplate) as unknown as SplinkWaterfallSpec;
+  delete spec.params;
   spec.data.values = data;
-  spec.params[0].bind.max = Math.max(0, data.length - 1);
-  spec.transform.splice(1, 0, { filter: "(datum.bayes_factor !== 1.0)" });
+  spec.transform.splice(0, 1, { filter: "(datum.bayes_factor !== 1.0)" });
   return spec as unknown as VisualizationSpec;
 }

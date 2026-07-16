@@ -846,6 +846,27 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
   padding: 18px 16px 20px;
 }
 
+.chart-disclosure {
+  margin: 0 0 20px;
+}
+
+.chart-disclosure > summary h2 {
+  margin: 0 0 5px;
+  color: #000;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.chart-disclosure-description {
+  margin: 0 0 12px;
+  color: #666;
+  font-size: 14px;
+}
+
+.chart-disclosure > .comparison-content {
+  padding: 16px;
+}
+
 .tf-adjustment-slider {
   display: block;
   margin: 0;

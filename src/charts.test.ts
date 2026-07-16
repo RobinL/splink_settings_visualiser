@@ -28,7 +28,7 @@ interface MutableMuSpec {
 
 interface MutableWaterfallSpec {
   data: { values: unknown };
-  params: [{ bind: { max: number } }];
+  params?: unknown;
   transform: unknown[];
 }
 
@@ -86,7 +86,7 @@ describe("Splink Vega-Lite specifications", () => {
     expect(muParametersSpec(data)).toEqual(expected);
   });
 
-  it("uses Splink's waterfall fields, values, and filter mutation", () => {
+  it("uses Splink's waterfall fields without the multi-record selector", () => {
     const level = model.comparisons[0].comparison_levels[1];
     const data = waterfallData(
       model,
@@ -106,9 +106,9 @@ describe("Splink Vega-Lite specifications", () => {
     expect(data[1]).toMatchObject({ value_l: "Ada", value_r: "Ada", record_number: 0 });
 
     const expected = structuredClone(waterfallTemplate) as unknown as MutableWaterfallSpec;
+    delete expected.params;
     expected.data.values = data;
-    expected.params[0].bind.max = data.length - 1;
-    expected.transform.splice(1, 0, { filter: "(datum.bayes_factor !== 1.0)" });
+    expected.transform.splice(0, 1, { filter: "(datum.bayes_factor !== 1.0)" });
     expect(waterfallSpec(data)).toEqual(expected);
   });
 });
