@@ -4,11 +4,13 @@ import duckdbEhWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js
 import duckdbMvpWasm from "@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url";
 import duckdbMvpWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url";
 import type {
+  ColumnKind,
   ColumnType,
   NormalizedComparison,
   NormalizedModel,
   PairValues,
 } from "./types";
+import { candidateKindsForColumn, isDateLikeColumn } from "./heuristics";
 
 const MANUAL_BUNDLES: duckdb.DuckDBBundles = {
   mvp: { mainModule: duckdbMvpWasm, mainWorker: duckdbMvpWorker },
@@ -59,11 +61,164 @@ function collectColumnReferences(value: unknown, output: Set<string>): void {
   Object.values(record).forEach((item) => collectColumnReferences(item, output));
 }
 
+interface DuckDBParsedSql {
+  error: boolean;
+  error_message?: string;
+  statements: Array<{ node: Record<string, unknown> }>;
+}
+
+async function parseSqlAst(
+  connection: duckdb.AsyncDuckDBConnection,
+  sql: string,
+): Promise<DuckDBParsedSql> {
+  const statement = await connection.prepare(
+    "SELECT json_serialize_sql(CAST(? AS VARCHAR), skip_null := true) AS ast",
+  );
+  try {
+    const result = await statement.query(sql);
+    const astValue = result.toArray()[0]?.ast;
+    if (typeof astValue !== "string") throw new Error("DuckDB returned no parsed SQL tree.");
+    const parsed = JSON.parse(astValue, (key, value: unknown) =>
+      key === "query_location" ? undefined : value,
+    ) as DuckDBParsedSql;
+    if (parsed.error) throw new Error(parsed.error_message ?? "DuckDB could not parse the model SQL.");
+    return parsed;
+  } finally {
+    await statement.close();
+  }
+}
+
+async function deserializeSqlAst(
+  connection: duckdb.AsyncDuckDBConnection,
+  ast: DuckDBParsedSql,
+): Promise<string> {
+  const statement = await connection.prepare(
+    "SELECT json_deserialize_sql(CAST(? AS VARCHAR)) AS sql",
+  );
+  try {
+    const result = await statement.query(JSON.stringify(ast));
+    const sql = result.toArray()[0]?.sql;
+    if (typeof sql !== "string") throw new Error("DuckDB could not regenerate function SQL.");
+    return sql.trim().replace(/;$/, "");
+  } finally {
+    await statement.close();
+  }
+}
+
+function collectFunctionNodes(value: unknown, output: Record<string, unknown>[]): void {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectFunctionNodes(item, output));
+    return;
+  }
+  if (typeof value !== "object" || value === null) return;
+  const record = value as Record<string, unknown>;
+  if (
+    record.class === "FUNCTION" &&
+    typeof record.function_name === "string" &&
+    record.is_operator !== true
+  ) {
+    output.push(record);
+  }
+  Object.values(record).forEach((item) => collectFunctionNodes(item, output));
+}
+
+function selectWithExpression(
+  template: DuckDBParsedSql,
+  expression: Record<string, unknown>,
+): DuckDBParsedSql {
+  const ast = structuredClone(template);
+  const selectNode = ast.statements[0]?.node;
+  if (!selectNode || !Array.isArray(selectNode.select_list)) {
+    throw new Error("DuckDB returned an unexpected SELECT tree.");
+  }
+  selectNode.select_list = [structuredClone(expression)];
+  return ast;
+}
+
 function basePairColumn(reference: string): string | null {
   const tableMatch = reference.match(/^(?:l|r)\.(.+)$/i);
   if (tableMatch) return tableMatch[1];
   const suffixMatch = reference.match(/^(.+)_(?:l|r)$/i);
   return suffixMatch?.[1] ?? null;
+}
+
+function replacePairColumns(
+  value: unknown,
+  replacements: Map<string, Record<string, unknown>>,
+): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => replacePairColumns(item, replacements));
+  }
+  if (typeof value !== "object" || value === null) return value;
+  const record = value as Record<string, unknown>;
+  if (record.class === "COLUMN_REF" && Array.isArray(record.column_names)) {
+    const names = record.column_names.filter((name): name is string => typeof name === "string");
+    const replacement = replacements.get(names.join("."));
+    if (replacement) return structuredClone(replacement);
+  }
+  return Object.fromEntries(
+    Object.entries(record).map(([key, item]) => [
+      key,
+      replacePairColumns(item, replacements),
+    ]),
+  );
+}
+
+function comparisonColumnUsage(ast: DuckDBParsedSql): Set<string>[] {
+  const selectList = ast.statements[0]?.node.select_list;
+  if (!Array.isArray(selectList)) {
+    throw new Error("DuckDB returned an unexpected comparison SELECT tree.");
+  }
+  return selectList.map((expression) => {
+    const references = new Set<string>();
+    collectColumnReferences(expression, references);
+    return new Set(
+      [...references]
+        .map(basePairColumn)
+        .filter((column): column is string => column !== null),
+    );
+  });
+}
+
+function valuesForCandidate(
+  values: PairValues,
+  column: string,
+  kind: ColumnKind,
+): PairValues {
+  const examples: Record<ColumnKind, [string, string]> = {
+    VARCHAR: ["example", "sample"],
+    DOUBLE: ["42", "43"],
+    BOOLEAN: ["true", "false"],
+    DATE: ["1990-01-01", "1990-01-02"],
+    TIMESTAMP: ["1990-01-01T12:00", "1990-01-02T12:00"],
+    "VARCHAR[]": ['["example"]', '["sample"]'],
+    "DOUBLE[]": ["[42]", "[43]"],
+    JSON: ['{"value":"example"}', '{"value":"sample"}'],
+    CUSTOM: ["{}", "{}"],
+  };
+  const [fallbackLeft, fallbackRight] = examples[kind];
+  return {
+    left: {
+      ...values.left,
+      [column]: fallbackLeft,
+    },
+    right: {
+      ...values.right,
+      [column]: fallbackRight,
+    },
+  };
+}
+
+async function queriesSucceed(
+  connection: duckdb.AsyncDuckDBConnection,
+  queries: string[],
+): Promise<boolean> {
+  try {
+    for (const query of queries) await connection.query(query);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function discoverColumns(model: NormalizedModel): Promise<string[]> {
@@ -73,13 +228,9 @@ export async function discoverColumns(model: NormalizedModel): Promise<string[]>
     const parsedSql = `SELECT ${model.comparisons
       .map((comparison, index) => comparisonCase(comparison, `gamma_${index}`))
       .join(", ")}`;
-    const result = await connection.query(
-      `SELECT json_serialize_sql(${quoteString(parsedSql)}, skip_null := true) AS ast`,
-    );
-    const astValue = result.toArray()[0]?.ast;
-    if (typeof astValue !== "string") throw new Error("DuckDB returned no parsed SQL tree.");
+    const ast = await parseSqlAst(connection, parsedSql);
     const references = new Set<string>();
-    collectColumnReferences(JSON.parse(astValue), references);
+    collectColumnReferences(ast, references);
     const columns = [...references]
       .map(basePairColumn)
       .filter((column): column is string => column !== null);
@@ -89,6 +240,93 @@ export async function discoverColumns(model: NormalizedModel): Promise<string[]>
       });
     });
     return [...new Set(columns)].sort((left, right) => left.localeCompare(right));
+  } finally {
+    await connection.close();
+  }
+}
+
+export async function inferColumnTypes(
+  model: NormalizedModel,
+  columns: string[],
+  values: PairValues,
+): Promise<Record<string, ColumnType>> {
+  const database = await getDatabase();
+  const connection = await database.connect();
+  try {
+    const parsedSql = `SELECT ${model.comparisons
+      .map((comparison, index) => comparisonCase(comparison, `gamma_${index}`))
+      .join(", ")}`;
+    const usage = comparisonColumnUsage(await parseSqlAst(connection, parsedSql));
+    const inferred: Record<string, ColumnType> = Object.fromEntries(
+      columns.map((column) => [
+        column,
+        { kind: isDateLikeColumn(column) ? "DATE" : "VARCHAR" },
+      ]),
+    );
+
+    for (const column of columns) {
+      const relevantIndexes = usage.flatMap((usedColumns, index) =>
+        usedColumns.has(column) ? [index] : [],
+      );
+      if (relevantIndexes.length === 0) continue;
+
+      const fallback = inferred[column];
+      let selected: ColumnType | undefined;
+      for (const kind of candidateKindsForColumn(column)) {
+        const candidateTypes = { ...inferred, [column]: { kind } as ColumnType };
+        const candidateValues = valuesForCandidate(values, column, kind);
+        const statements = buildComparisonEvaluationSqls(
+          model,
+          columns,
+          candidateTypes,
+          candidateValues,
+        );
+        if (
+          await queriesSucceed(
+            connection,
+            relevantIndexes.map((index) => statements[index]),
+          )
+        ) {
+          selected = { kind };
+          break;
+        }
+      }
+      inferred[column] = selected ?? fallback;
+    }
+    return inferred;
+  } finally {
+    await connection.close();
+  }
+}
+
+export async function discoverFunctionExpressions(model: NormalizedModel): Promise<string[][]> {
+  const database = await getDatabase();
+  const connection = await database.connect();
+  try {
+    const parsedSql = `SELECT ${model.comparisons
+      .map((comparison, index) => comparisonCase(comparison, `gamma_${index}`))
+      .join(", ")}`;
+    const ast = await parseSqlAst(connection, parsedSql);
+    const template = await parseSqlAst(connection, "SELECT 1");
+    const selectList = ast.statements[0]?.node.select_list;
+    if (!Array.isArray(selectList)) {
+      throw new Error("DuckDB returned an unexpected comparison SELECT tree.");
+    }
+    const expressionsByComparison: string[][] = [];
+    for (const comparisonExpression of selectList) {
+      const functionNodes: Record<string, unknown>[] = [];
+      collectFunctionNodes(comparisonExpression, functionNodes);
+      const generated: string[] = [];
+      for (const node of functionNodes) {
+        generated.push(
+          await deserializeSqlAst(connection, selectWithExpression(template, node)),
+        );
+      }
+      expressionsByComparison.push([
+        ...new Set(generated.map((sql) => sql.slice("SELECT ".length))),
+      ]);
+    }
+    return expressionsByComparison;
   } finally {
     await connection.close();
   }
@@ -128,23 +366,100 @@ function typedLiteral(raw: string | null, type: ColumnType): string {
   return `CAST(CAST(${quoteString(raw)} AS JSON) AS ${targetType})`;
 }
 
-export function buildEvaluationSql(
-  model: NormalizedModel,
+export function displayLiteral(raw: string | null, type: ColumnType): string {
+  if (raw === null) return "NULL";
+  if (type.kind !== "VARCHAR" && raw.trim() === "") return "NULL";
+  if (type.kind === "VARCHAR") return quoteString(raw);
+  if (type.kind === "DOUBLE") {
+    const number = Number(raw);
+    if (!Number.isFinite(number)) throw new Error(`'${raw}' is not a valid number.`);
+    return String(number);
+  }
+  if (type.kind === "BOOLEAN") {
+    if (!/^(true|false)$/i.test(raw)) throw new Error(`'${raw}' is not a valid boolean.`);
+    return raw.toUpperCase();
+  }
+  if (type.kind === "DATE") return `DATE ${quoteString(raw)}`;
+  if (type.kind === "TIMESTAMP") return `TIMESTAMP ${quoteString(raw)}`;
+  return typedLiteral(raw, type);
+}
+
+export async function substitutePairValues(
+  expressions: string[],
+  columnTypes: Record<string, ColumnType>,
+  values: PairValues,
+): Promise<string[]> {
+  if (expressions.length === 0) return [];
+  const database = await getDatabase();
+  const connection = await database.connect();
+  try {
+    const replacements = new Map<string, Record<string, unknown>>();
+    for (const [side, suffix] of [["left", "l"], ["right", "r"]] as const) {
+      for (const [column, raw] of Object.entries(values[side])) {
+        const type = columnTypes[column] ?? { kind: "VARCHAR" as const };
+        const literalAst = await parseSqlAst(
+          connection,
+          `SELECT ${displayLiteral(raw, type)}`,
+        );
+        const literal = literalAst.statements[0]?.node.select_list;
+        if (!Array.isArray(literal) || typeof literal[0] !== "object" || literal[0] === null) {
+          throw new Error("DuckDB returned an unexpected literal tree.");
+        }
+        replacements.set(`${column}_${suffix}`, literal[0] as Record<string, unknown>);
+        replacements.set(`${suffix}.${column}`, literal[0] as Record<string, unknown>);
+      }
+    }
+
+    const substituted: string[] = [];
+    for (const expression of expressions) {
+      if (/^\s*else\s*$/i.test(expression)) {
+        substituted.push(expression);
+        continue;
+      }
+      const ast = await parseSqlAst(connection, `SELECT ${expression}`);
+      const selectList = ast.statements[0]?.node.select_list;
+      if (!Array.isArray(selectList) || !selectList[0]) {
+        throw new Error("DuckDB returned an unexpected expression tree.");
+      }
+      ast.statements[0].node.select_list = [
+        replacePairColumns(selectList[0], replacements),
+      ];
+      const sql = await deserializeSqlAst(connection, ast);
+      substituted.push(sql.slice("SELECT ".length));
+    }
+    return substituted;
+  } finally {
+    await connection.close();
+  }
+}
+
+function pairCte(
   columns: string[],
   columnTypes: Record<string, ColumnType>,
   values: PairValues,
 ): string {
   const pairColumns = columns.flatMap((column) => {
     const type = columnTypes[column] ?? { kind: "VARCHAR" as const };
+    const left = values.left[column] === undefined ? "" : values.left[column];
+    const right = values.right[column] === undefined ? "" : values.right[column];
     return [
-      `${typedLiteral(values.left[column] ?? "", type)} AS ${quoteIdentifier(`${column}_l`)}`,
-      `${typedLiteral(values.right[column] ?? "", type)} AS ${quoteIdentifier(`${column}_r`)}`,
+      `${typedLiteral(left, type)} AS ${quoteIdentifier(`${column}_l`)}`,
+      `${typedLiteral(right, type)} AS ${quoteIdentifier(`${column}_r`)}`,
     ];
   });
+  return `WITH pair AS (SELECT\n  ${pairColumns.join(",\n  ")}\n)`;
+}
+
+export function buildEvaluationSql(
+  model: NormalizedModel,
+  columns: string[],
+  columnTypes: Record<string, ColumnType>,
+  values: PairValues,
+): string {
   const gammas = model.comparisons.map((comparison, index) =>
     comparisonCase(comparison, `gamma_${index}`),
   );
-  return `WITH pair AS (SELECT\n  ${pairColumns.join(",\n  ")}\n)\nSELECT\n  ${gammas.join(",\n  ")}\nFROM pair`;
+  return `${pairCte(columns, columnTypes, values)}\nSELECT\n  ${gammas.join(",\n  ")}\nFROM pair`;
 }
 
 export function buildComparisonEvaluationSqls(
@@ -163,6 +478,18 @@ export function buildComparisonEvaluationSqls(
   );
 }
 
+export function buildFunctionEvaluationSqls(
+  expressions: string[],
+  columns: string[],
+  columnTypes: Record<string, ColumnType>,
+  values: PairValues,
+): string[] {
+  const pair = pairCte(columns, columnTypes, values);
+  return expressions.map(
+    (expression) => `${pair}\nSELECT ${expression} AS function_value\nFROM pair`,
+  );
+}
+
 export async function evaluatePair(sql: string): Promise<number[]> {
   const database = await getDatabase();
   const connection = await database.connect();
@@ -171,6 +498,19 @@ export async function evaluatePair(sql: string): Promise<number[]> {
     const row = result.toArray()[0] as Record<string, unknown> | undefined;
     if (!row) throw new Error("DuckDB returned no comparison result.");
     return Object.values(row).map((value) => Number(value));
+  } finally {
+    await connection.close();
+  }
+}
+
+export async function evaluateExpression(sql: string): Promise<unknown> {
+  const database = await getDatabase();
+  const connection = await database.connect();
+  try {
+    const result = await connection.query(sql);
+    const row = result.toArray()[0] as Record<string, unknown> | undefined;
+    if (!row) throw new Error("DuckDB returned no function result.");
+    return row.function_value;
   } finally {
     await connection.close();
   }

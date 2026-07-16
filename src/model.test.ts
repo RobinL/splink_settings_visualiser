@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildComparisonEvaluationSqls, buildEvaluationSql } from "./duckdb";
+import {
+  buildComparisonEvaluationSqls,
+  buildEvaluationSql,
+  buildFunctionEvaluationSqls,
+  displayLiteral,
+} from "./duckdb";
 import {
   chartData,
   finalMatchWeight,
@@ -70,6 +75,14 @@ describe("Splink model normalization", () => {
 });
 
 describe("DuckDB evaluation SQL", () => {
+  it("formats pair values as copyable typed SQL literals", () => {
+    expect(displayLiteral("O'Brien", { kind: "VARCHAR" })).toBe("'O''Brien'");
+    expect(displayLiteral(null, { kind: "VARCHAR" })).toBe("NULL");
+    expect(displayLiteral("1990-01-01", { kind: "DATE" })).toBe("DATE '1990-01-01'");
+    expect(displayLiteral("42.5", { kind: "DOUBLE" })).toBe("42.5");
+    expect(displayLiteral("true", { kind: "BOOLEAN" })).toBe("TRUE");
+  });
+
   it("casts scalar, list, and struct values into a one-row pair", () => {
     const sql = buildEvaluationSql(
       model,
@@ -116,5 +129,30 @@ describe("DuckDB evaluation SQL", () => {
     expect(statements[0]).not.toContain("age_l = age_r");
     expect(statements[1]).toContain("age_l = age_r");
     expect(statements[1]).not.toContain("name_l = name_r");
+  });
+
+  it("preserves explicit nulls and evaluates discovered functions against the same pair", () => {
+    const values = {
+      left: { name: null },
+      right: { name: "Robin" },
+    };
+    const evaluationSql = buildEvaluationSql(
+      model,
+      ["name"],
+      { name: { kind: "VARCHAR" } },
+      values,
+    );
+    const [functionSql] = buildFunctionEvaluationSqls(
+      ["jaro_winkler_similarity(name_l, name_r)"],
+      ["name"],
+      { name: { kind: "VARCHAR" } },
+      values,
+    );
+
+    expect(evaluationSql).toContain('CAST(NULL AS VARCHAR) AS "name_l"');
+    expect(functionSql).toContain('CAST(NULL AS VARCHAR) AS "name_l"');
+    expect(functionSql).toContain(
+      "SELECT jaro_winkler_similarity(name_l, name_r) AS function_value",
+    );
   });
 });

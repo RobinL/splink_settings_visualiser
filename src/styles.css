@@ -137,9 +137,10 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 .comparison-head > div:first-child { min-width: 0; gap: 10px; }
 .comparison-head h3 { margin: 0; overflow: hidden; text-overflow: ellipsis; font-size: 17px; }
 .comparison-number { color: #9a968d; font-family: "IBM Plex Mono", monospace; font-size: 11px; }
-.level-result { max-width: 55%; padding: 7px 9px; display: flex; align-items: center; gap: 10px; border-radius: 3px; font-size: 11px; }
+.level-result { width: 100%; max-width: none; padding: 7px 9px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; border-radius: 3px; font-size: 11px; }
 .level-result span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .level-result strong { margin-left: auto; white-space: nowrap; }
+.selected-level-sql { display: block; color: inherit; white-space: normal; overflow-wrap: anywhere; }
 .level-result.positive { color: #135d48; background: var(--green-soft); }
 .level-result.negative { color: #8c342b; background: var(--red-soft); }
 .level-result.pending { color: var(--muted); background: #ece9e2; }
@@ -550,19 +551,252 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
   border: 1px solid #e7e7e7;
 }
 
-.comparison-widget {
-  margin: 0;
-  padding: 14px 8px;
+.pair-table-editor {
+  padding: 12px;
+  background: #f5f5f5;
+  border: 1px solid #e7e7e7;
+}
+
+.null-all-button {
+  min-height: 32px;
+  padding: 0 10px;
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.pair-record-table {
+  width: 100%;
+  min-width: 760px;
+  table-layout: fixed;
+}
+
+.pair-record-table th,
+.pair-record-table td {
+  padding: 8px;
+  border-right: 1px solid #e7e7e7;
+  vertical-align: top;
+}
+
+.pair-record-table th:first-child {
+  width: 18%;
+}
+
+.pair-record-table th:nth-child(2),
+.pair-record-table th:nth-child(3) {
+  width: 31%;
+}
+
+.pair-record-table th:last-child {
+  width: 20%;
+}
+
+.pair-record-table thead th {
+  color: #3c3c3c;
+  font-size: 12px;
+}
+
+.pair-record-table tbody tr {
+  background: #fff;
+}
+
+.pair-record-table tbody tr:hover {
+  background: #fffdbc;
+}
+
+.pair-record-table tbody th {
+  background: #f5f5f5;
+  white-space: nowrap;
+}
+
+.pair-record-table .cell-editor {
+  min-width: 0;
+}
+
+.function-results {
+  margin-top: 14px;
+  border-top: 1px solid #ddd;
+}
+
+.function-results h4 {
+  margin: 12px 0 6px;
+  color: #000;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.function-results table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.function-results th,
+.function-results td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #e7e7e7;
+  text-align: left;
+  font-size: 12px;
+}
+
+.function-results th {
+  width: 65%;
+  font-weight: 400;
+}
+
+.function-results output {
+  color: #000;
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+}
+
+.function-results code,
+.function-results output {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.function-unavailable {
+  color: #777;
+}
+
+.comparison-section .outcomes-note {
+  display: block;
+  margin: 2px 0 0;
+  color: #666;
+  font-size: 13px;
+}
+
+.expression-mode {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border: 1px solid #bbb;
+}
+
+.expression-mode button {
+  min-height: 32px;
+  padding: 0 10px;
+  color: #555;
+  background: #fff;
   border: 0;
+  border-right: 1px solid #bbb;
+  font-size: 12px;
+}
+
+.expression-mode button:last-child {
+  border-right: 0;
+}
+
+.expression-mode button.active {
+  color: #000;
+  background: #e5e5e5;
+  font-weight: 600;
+}
+
+.comparison-functions {
+  margin-top: 18px;
+  padding-top: 18px;
   border-top: 1px solid #e7e7e7;
 }
 
-.comparison-widget:nth-child(even) {
-  background: #f5f5f5;
+.comparison-functions table {
+  background: transparent;
 }
 
-.comparison-widget:last-child {
-  border-bottom: 1px solid #e7e7e7;
+.activated-level {
+  margin-top: 0;
+}
+
+.activated-level h4,
+.comparison-functions h4,
+.level-details h4 {
+  margin: 0 0 6px;
+  color: #000;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.activated-level .level-result {
+  width: 100%;
+  max-width: none;
+  display: block;
+  font-family: "IBM Plex Mono", monospace;
+  line-height: 1.55;
+}
+
+.comparison-widget {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #d8d8d8;
+  border-radius: 5px;
+}
+
+.comparison-widget[open] {
+  border-color: #bcbcbc;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 7%);
+}
+
+.comparison-widget > summary {
+  min-height: 58px;
+  padding: 14px 16px;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.comparison-widget > summary::-webkit-details-marker {
+  display: none;
+}
+
+.comparison-widget > summary:hover {
+  background: #f7f7f7;
+}
+
+.comparison-widget[open] > summary {
+  background: #f5f5f5;
+  border-bottom: 1px solid #dedede;
+}
+
+.comparison-expand-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  color: #666;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.comparison-expand-hint .collapse-label {
+  display: none;
+}
+
+.comparison-widget[open] .comparison-expand-hint .expand-label {
+  display: none;
+}
+
+.comparison-widget[open] .comparison-expand-hint .collapse-label {
+  display: inline;
+}
+
+.comparison-expand-hint svg {
+  transition: transform 160ms ease;
+}
+
+.comparison-widget[open] .comparison-expand-hint svg {
+  transform: rotate(180deg);
+}
+
+.comparison-content {
+  padding: 18px 16px 20px;
+}
+
+.level-details {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #e7e7e7;
 }
 
 .sql-panel {
@@ -590,5 +824,32 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 
   .record-editor {
     padding: 10px;
+  }
+
+  .pair-table-editor {
+    padding: 10px;
+  }
+
+  .comparison-section > .section-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .function-results tr,
+  .function-results th,
+  .function-results td {
+    display: block;
+    width: 100%;
+  }
+
+  .function-results tr {
+    padding: 8px;
+    border-bottom: 1px solid #e7e7e7;
+  }
+
+  .function-results th,
+  .function-results td {
+    padding: 2px 0;
+    border: 0;
   }
 }
