@@ -25,6 +25,7 @@ interface SplinkMatchWeightsSpec {
     {
       encoding: {
         x: { scale: { domain: number[] } };
+        opacity?: unknown;
         stroke?: unknown;
         strokeWidth?: unknown;
       };
@@ -73,6 +74,10 @@ export function matchWeightsSpec(
     spec.vconcat[1].encoding.strokeWidth = {
       condition: { test: "datum.is_activated", value: 3 },
       value: 0,
+    };
+    spec.vconcat[1].encoding.opacity = {
+      condition: { test: "datum.is_activated", value: 1 },
+      value: 0.3,
     };
   }
 

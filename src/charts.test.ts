@@ -75,7 +75,7 @@ describe("Splink Vega-Lite specifications", () => {
     expect(matchWeightsSpec(data)).toEqual(expected);
   });
 
-  it("adds a yellow border to activated match-weight bars when requested", () => {
+  it("highlights activated match-weight bars and dims the others", () => {
     const data = chartData(model);
     const level = model.comparisons[0].comparison_levels[1];
     const spec = matchWeightsSpec(data, [
@@ -103,6 +103,10 @@ describe("Splink Vega-Lite specifications", () => {
     expect(spec.vconcat[1].encoding.strokeWidth).toEqual({
       condition: { test: "datum.is_activated", value: 3 },
       value: 0,
+    });
+    expect(spec.vconcat[1].encoding.opacity).toEqual({
+      condition: { test: "datum.is_activated", value: 1 },
+      value: 0.3,
     });
   });
 
