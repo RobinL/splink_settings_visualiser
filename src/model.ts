@@ -127,7 +127,7 @@ export function editorStateFromExampleData(
   const columnTypes = Object.fromEntries(
     columns.map((column) => [
       column,
-      exampleData.column_types[column] ?? fallbackTypes[column] ?? { kind: "VARCHAR" },
+      fallbackTypes[column] ?? exampleData.column_types[column] ?? { kind: "VARCHAR" },
     ]),
   );
   const values: PairValues = {

@@ -78,6 +78,28 @@ describe("Splink model normalization", () => {
     });
   });
 
+  it("uses SQL-validated inferred types over incompatible saved metadata", () => {
+    expect(
+      editorStateFromExampleData(
+        {
+          version: 1,
+          column_types: { dob: { kind: "DATE" } },
+          record_l: { dob: "1990-01-01" },
+          record_r: { dob: "1990-01-02" },
+        },
+        ["dob"],
+        { dob: { kind: "VARCHAR" } },
+        { left: {}, right: {} },
+      ),
+    ).toEqual({
+      columnTypes: { dob: { kind: "VARCHAR" } },
+      values: {
+        left: { dob: "1990-01-01" },
+        right: { dob: "1990-01-02" },
+      },
+    });
+  });
+
   it("rejects invalid example data column types", () => {
     expect(() =>
       parseModel({

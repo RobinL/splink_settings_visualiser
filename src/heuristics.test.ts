@@ -35,7 +35,12 @@ describe("type candidate heuristics", () => {
   it("tries DATE first for date-like names", () => {
     expect(isDateLikeColumn("DOB")).toBe(true);
     expect(isDateLikeColumn("created-date")).toBe(true);
-    expect(candidateKindsForColumn("date_of_birth")[0]).toBe("DATE");
+    expect(candidateKindsForColumn("date_of_birth")).toEqual([
+      "DATE",
+      "VARCHAR",
+      "DOUBLE",
+      "BOOLEAN",
+    ]);
   });
 
   it("keeps text as the conservative default for other fields", () => {

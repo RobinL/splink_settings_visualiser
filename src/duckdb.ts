@@ -274,7 +274,9 @@ export async function inferColumnTypes(
     const inferred: Record<string, ColumnType> = Object.fromEntries(
       columns.map((column) => [
         column,
-        { kind: isDateLikeColumn(column) ? "DATE" : "VARCHAR" },
+        model.example_data?.column_types[column] ?? {
+          kind: isDateLikeColumn(column) ? "DATE" : "VARCHAR",
+        },
       ]),
     );
 
@@ -284,11 +286,23 @@ export async function inferColumnTypes(
       );
       if (relevantIndexes.length === 0) continue;
 
-      const fallback = inferred[column];
+      const fallback: ColumnType = {
+        kind: isDateLikeColumn(column) ? "DATE" : "VARCHAR",
+      };
+      const candidates = [
+        model.example_data?.column_types[column],
+        ...candidateKindsForColumn(column).map((kind) => ({ kind }) as ColumnType),
+      ].filter((type): type is ColumnType => type !== undefined);
+      const uniqueCandidates = candidates.filter(
+        (candidate, index) =>
+          candidates.findIndex(
+            (other) => JSON.stringify(other) === JSON.stringify(candidate),
+          ) === index,
+      );
       let selected: ColumnType | undefined;
-      for (const kind of candidateKindsForColumn(column)) {
-        const candidateTypes = { ...inferred, [column]: { kind } as ColumnType };
-        const candidateValues = valuesForCandidate(values, column, kind);
+      for (const candidate of uniqueCandidates) {
+        const candidateTypes = { ...inferred, [column]: candidate };
+        const candidateValues = valuesForCandidate(values, column, candidate.kind);
         const statements = buildComparisonEvaluationSqls(
           model,
           columns,
@@ -301,7 +315,7 @@ export async function inferColumnTypes(
             relevantIndexes.map((index) => statements[index]),
           )
         ) {
-          selected = { kind };
+          selected = candidate;
           break;
         }
       }

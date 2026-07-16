@@ -216,17 +216,23 @@ function PairTable({
   columns,
   columnTypes,
   values,
+  tfAdjustmentColumns,
+  tfAdjustments,
   onTypeChange,
   onCustomTypeChange,
   onValueChange,
+  onTfAdjustmentChange,
   onSetAllNull,
 }: {
   columns: string[];
   columnTypes: Record<string, ColumnType>;
   values: PairValues;
+  tfAdjustmentColumns: string[];
+  tfAdjustments: Record<string, number>;
   onTypeChange: (column: string, kind: ColumnKind) => void;
   onCustomTypeChange: (column: string, customType: string) => void;
   onValueChange: (side: Side, column: string, value: string | null) => void;
+  onTfAdjustmentChange: (column: string, value: number) => void;
   onSetAllNull: () => void;
 }) {
   return (
@@ -301,6 +307,34 @@ function PairTable({
           </tbody>
         </table>
       </div>
+      {tfAdjustmentColumns.length > 0 && (
+        <div className="record-tf-adjustments">
+          {tfAdjustmentColumns.map((column) => (
+            <label className="tf-adjustment-slider" key={column}>
+              <span>
+                <span>
+                  <code>{column}</code> term frequency adjustment (match weight)
+                </span>
+                <output>
+                  {(tfAdjustments[column] ?? 1) >= 0 ? "+" : ""}
+                  {(tfAdjustments[column] ?? 1).toFixed(1)}
+                </output>
+              </span>
+              <input
+                aria-label={`${column} term frequency adjustment`}
+                type="range"
+                min="-10"
+                max="10"
+                step="0.1"
+                value={tfAdjustments[column] ?? 1}
+                onChange={(event) =>
+                  onTfAdjustmentChange(column, Number(event.target.value))
+                }
+              />
+            </label>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -661,20 +695,14 @@ export function App() {
       })
       .then(({ discovered, exampleValues, expressions, inferredTypes }) => {
         if (cancelled) return;
-        const resolvedTypes = Object.fromEntries(
-          discovered.map((column) => [
-            column,
-            model.example_data?.column_types[column] ?? inferredTypes[column],
-          ]),
-        );
         const compatibleValues = valuesForColumnTypes(
           exampleValues,
-          resolvedTypes,
+          inferredTypes,
         );
         const initialState = editorStateFromExampleData(
           model.example_data,
           discovered,
-          resolvedTypes,
+          inferredTypes,
           compatibleValues,
         );
         setColumns(discovered);
@@ -1240,6 +1268,14 @@ export function App() {
               columns={columns}
               columnTypes={columnTypes}
               values={values}
+              tfAdjustmentColumns={model.comparisons
+                .filter((comparison) =>
+                  comparison.comparison_levels.some(
+                    (level) => level.tf_adjustment_column,
+                  ),
+                )
+                .map((comparison) => comparison.output_column_name)}
+              tfAdjustments={tfAdjustments}
               onTypeChange={updateType}
               onCustomTypeChange={(column, customType) =>
                 setColumnTypes((current) => ({
@@ -1248,6 +1284,12 @@ export function App() {
                 }))
               }
               onValueChange={updateValue}
+              onTfAdjustmentChange={(column, value) =>
+                setTfAdjustments((current) => ({
+                  ...current,
+                  [column]: value,
+                }))
+              }
               onSetAllNull={setEverythingNull}
             />
           )}
@@ -1335,35 +1377,6 @@ export function App() {
                           </div>
                         )}
                       </div>
-                      {comparison.comparison_levels.some(
-                        (level) => level.tf_adjustment_column,
-                      ) && (
-                        <label className="tf-adjustment-slider">
-                          <span>
-                            Term frequency adjustment (match weight)
-                            <output>
-                              {(tfAdjustments[comparison.output_column_name] ?? 1) >= 0
-                                ? "+"
-                                : ""}
-                              {(tfAdjustments[comparison.output_column_name] ?? 1).toFixed(1)}
-                            </output>
-                          </span>
-                          <input
-                            aria-label={`${comparison.output_column_name} term frequency adjustment`}
-                            type="range"
-                            min="-10"
-                            max="10"
-                            step="0.1"
-                            value={tfAdjustments[comparison.output_column_name] ?? 1}
-                            onChange={(event) =>
-                              setTfAdjustments((current) => ({
-                                ...current,
-                                [comparison.output_column_name]: Number(event.target.value),
-                              }))
-                            }
-                          />
-                        </label>
-                      )}
                       <FunctionValues
                         outcomes={functionOutcomes[index] ?? []}
                         displayedExpressions={displayedExpressions}
