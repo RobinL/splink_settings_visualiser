@@ -37,3 +37,14 @@ npm test
 npm run lint
 npm run build
 ```
+
+## Deploy
+
+Publish the production build to the `gh-pages` branch:
+
+```bash
+pnpm run deploy
+```
+
+The same script can be run with `npm run deploy`. The deployed project is served
+at <https://robinlinacre.com/splink_settings_visualiser/>.
