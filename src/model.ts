@@ -41,6 +41,16 @@ function validateExampleData(value: unknown): asserts value is SplinkExampleData
       throw new Error(`example_data custom type '${column}' requires customType.`);
     }
   }
+  if (value.derived_columns !== undefined) {
+    if (!isObject(value.derived_columns)) {
+      throw new Error("example_data derived_columns must be an object.");
+    }
+    for (const [column, expression] of Object.entries(value.derived_columns)) {
+      if (!column.trim() || typeof expression !== "string" || !expression.trim()) {
+        throw new Error(`example_data has an invalid derived column '${column}'.`);
+      }
+    }
+  }
   if (value.term_frequency_adjustments !== undefined) {
     if (!isObject(value.term_frequency_adjustments)) {
       throw new Error("example_data term_frequency_adjustments must be an object.");

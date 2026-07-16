@@ -52,8 +52,12 @@ describe("Splink model normalization", () => {
         },
         record_l: { name: "O'Brien", score: 42.5, tags: ["a", "b"] },
         record_r: { name: null, score: 41, tags: ["c"] },
+        derived_columns: { display_name: "name || '!'" },
         term_frequency_adjustments: { name: 1.5 },
       },
+    });
+    expect(withExamples.example_data?.derived_columns).toEqual({
+      display_name: "name || '!'",
     });
     expect(withExamples.example_data?.term_frequency_adjustments).toEqual({
       name: 1.5,
@@ -129,6 +133,21 @@ describe("Splink model normalization", () => {
     ).toThrow("example_data has an invalid TF adjustment for 'name'");
   });
 
+  it("rejects blank derived column expressions", () => {
+    expect(() =>
+      parseModel({
+        ...model,
+        example_data: {
+          version: 1,
+          column_types: {},
+          record_l: {},
+          record_r: {},
+          derived_columns: { full_name: "" },
+        },
+      }),
+    ).toThrow("example_data has an invalid derived column 'full_name'");
+  });
+
   it("extracts string and serialized blocking rules", () => {
     const withRules = parseModel({
       ...model,
@@ -189,7 +208,7 @@ describe("DuckDB evaluation SQL", () => {
       { name: { kind: "VARCHAR" } },
       { left: { name: "O'Brien" }, right: { name: "Robin" } },
     );
-    expect(sql).toContain("WITH l AS (SELECT");
+    expect(sql).toContain("WITH l_base AS (SELECT");
     expect(sql).toContain("O''Brien");
     expect(sql).toContain('AS "name"');
     expect(sql).toContain("FROM l CROSS JOIN r");
@@ -242,6 +261,48 @@ describe("DuckDB evaluation SQL", () => {
     expect(sql).toContain("WHEN name_l = name_r THEN 1");
   });
 
+  it("computes derived columns from base record values", () => {
+    const derivedModel = parseModel({
+      ...model,
+      comparisons: [
+        {
+          output_column_name: "full_name",
+          comparison_levels: [
+            {
+              sql_condition:
+                "first_name_surname_concat_l = first_name_surname_concat_r",
+              m_probability: 0.9,
+              u_probability: 0.1,
+            },
+            { sql_condition: "ELSE", m_probability: 0.1, u_probability: 0.9 },
+          ],
+        },
+      ],
+    });
+    const sql = buildEvaluationSql(
+      derivedModel,
+      ["first_name_surname_concat", "first_name", "surname"],
+      {
+        first_name_surname_concat: { kind: "VARCHAR" },
+        first_name: { kind: "VARCHAR" },
+        surname: { kind: "VARCHAR" },
+      },
+      {
+        left: { first_name: "Ada", surname: "Lovelace" },
+        right: { first_name: "Ada", surname: "Lovelace" },
+      },
+      {
+        first_name_surname_concat: "first_name || ' ' || surname",
+      },
+    );
+
+    expect(sql).toContain("CAST('Ada' AS VARCHAR) AS \"first_name\"");
+    expect(sql).toContain(
+      "(first_name || ' ' || surname) AS \"first_name_surname_concat\"",
+    );
+    expect(sql).not.toContain("'' AS \"first_name_surname_concat\"");
+  });
+
   it("isolates comparison SQL so one binder error cannot block other outcomes", () => {
     const twoComparisonModel = parseModel({
       ...model,
@@ -288,8 +349,10 @@ describe("DuckDB evaluation SQL", () => {
       values,
     );
 
-    expect(evaluationSql).toContain('CAST(NULL AS VARCHAR) AS "name_l"');
-    expect(functionSql).toContain('CAST(NULL AS VARCHAR) AS "name_l"');
+    expect(evaluationSql).toContain('CAST(NULL AS VARCHAR) AS "name"');
+    expect(evaluationSql).toContain('l."name" AS "name_l"');
+    expect(functionSql).toContain('CAST(NULL AS VARCHAR) AS "name"');
+    expect(functionSql).toContain('l."name" AS "name_l"');
     expect(functionSql).toContain(
       "SELECT jaro_winkler_similarity(name_l, name_r) AS function_value",
     );

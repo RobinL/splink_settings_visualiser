@@ -620,6 +620,105 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
   margin-top: 12px;
 }
 
+.derived-record-value {
+  min-height: 32px;
+  padding: 7px 8px;
+  display: block;
+  overflow-wrap: anywhere;
+  color: #333;
+  background: #f2f2f2;
+  border: 1px solid #ddd;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+}
+
+.derived-type {
+  min-height: 32px;
+  padding: 7px 8px;
+  display: block;
+  color: #555;
+  background: #eee;
+  border: 1px solid #ddd;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.advanced-record-settings {
+  margin-top: 14px;
+  border-top: 1px solid #d8d8d8;
+}
+
+.advanced-record-settings > summary {
+  padding: 12px 4px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  cursor: pointer;
+  color: #444;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.advanced-record-settings > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-record-settings > summary svg {
+  transition: transform 160ms ease;
+}
+
+.advanced-record-settings[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.derived-column-settings {
+  margin-top: 10px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #ddd;
+}
+
+.derived-column-row {
+  display: grid;
+  grid-template-columns: minmax(150px, .75fr) minmax(240px, 1.5fr) 36px;
+  gap: 8px;
+  align-items: center;
+}
+
+.derived-column-row + .derived-column-row {
+  margin-top: 8px;
+}
+
+.derived-column-row > code,
+.derived-column-row > input {
+  min-width: 0;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid #ccc;
+  font-size: 12px;
+}
+
+.derived-column-row > code {
+  background: #f5f5f5;
+}
+
+.derived-column-new .secondary-button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.derived-column-error {
+  margin-top: 10px;
+  padding: 8px 10px;
+  color: var(--red);
+  background: var(--red-soft);
+  border: 1px solid #e6c7c0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+
 .function-results {
   margin-top: 14px;
   border-top: 1px solid #ddd;
@@ -1025,5 +1124,18 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 
   .blocking-rule-status {
     justify-self: start;
+  }
+
+  .derived-column-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .derived-column-row > code,
+  .derived-column-row > .type-select {
+    grid-column: 1 / -1;
+  }
+
+  .derived-column-new .secondary-button {
+    min-width: 64px;
   }
 }

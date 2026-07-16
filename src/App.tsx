@@ -40,6 +40,7 @@ import {
   evaluateExpression,
   evaluatePair,
   inferColumnTypes,
+  materializeDerivedValues,
   serializeExampleData,
   substitutePairValues,
   valuesForColumnTypes,
@@ -216,25 +217,38 @@ function PairTable({
   columns,
   columnTypes,
   values,
+  resolvedValues,
+  derivedColumns,
+  derivedColumnError,
   tfAdjustmentColumns,
   tfAdjustments,
   onTypeChange,
   onCustomTypeChange,
   onValueChange,
+  onDerivedColumnChange,
   onTfAdjustmentChange,
   onSetAllNull,
 }: {
   columns: string[];
   columnTypes: Record<string, ColumnType>;
   values: PairValues;
+  resolvedValues: PairValues;
+  derivedColumns: Record<string, string>;
+  derivedColumnError?: string;
   tfAdjustmentColumns: string[];
   tfAdjustments: Record<string, number>;
   onTypeChange: (column: string, kind: ColumnKind) => void;
   onCustomTypeChange: (column: string, customType: string) => void;
   onValueChange: (side: Side, column: string, value: string | null) => void;
+  onDerivedColumnChange: (column: string, expression?: string) => void;
   onTfAdjustmentChange: (column: string, value: number) => void;
   onSetAllNull: () => void;
 }) {
+  const [newDerivedColumn, setNewDerivedColumn] = useState("");
+  const [newDerivedExpression, setNewDerivedExpression] = useState("");
+  const availableDerivedColumns = columns.filter(
+    (column) => !(column in derivedColumns),
+  );
   return (
     <section className="content-band pair-table-editor">
       <div className="section-title">
@@ -260,45 +274,61 @@ function PairTable({
               const type = columnTypes[column] ?? {
                 kind: "VARCHAR" as const,
               };
+              const isDerived = column in derivedColumns;
               return (
                 <tr key={column}>
                   <th>{column}</th>
                   {(["left", "right"] as Side[]).map((side) => (
                     <td key={side}>
-                      <InputEditor
-                        column={column}
-                        type={type}
-                        value={pairValue(values, side, column)}
-                        onChange={(value) => onValueChange(side, column, value)}
-                      />
+                      {isDerived ? (
+                        <output
+                          className="derived-record-value"
+                          aria-label={`${column} derived ${side} value`}
+                        >
+                          {pairValue(resolvedValues, side, column) ?? "NULL"}
+                        </output>
+                      ) : (
+                        <InputEditor
+                          column={column}
+                          type={type}
+                          value={pairValue(values, side, column)}
+                          onChange={(value) => onValueChange(side, column, value)}
+                        />
+                      )}
                     </td>
                   ))}
                   <td>
-                    <div className="type-select">
-                      <select
-                        aria-label={`${column} data type`}
-                        value={type.kind}
-                        onChange={(event) =>
-                          onTypeChange(column, event.target.value as ColumnKind)
-                        }
-                      >
-                        {TYPE_OPTIONS.map((option) => (
-                          <option value={option.value} key={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={14} />
-                    </div>
-                    {type.kind === "CUSTOM" && (
-                      <input
-                        className="custom-type"
-                        value={type.customType ?? ""}
-                        onChange={(event) =>
-                          onCustomTypeChange(column, event.target.value)
-                        }
-                        placeholder="STRUCT(city VARCHAR)"
-                      />
+                    {isDerived ? (
+                      <span className="derived-type">Derived</span>
+                    ) : (
+                      <>
+                        <div className="type-select">
+                          <select
+                            aria-label={`${column} data type`}
+                            value={type.kind}
+                            onChange={(event) =>
+                              onTypeChange(column, event.target.value as ColumnKind)
+                            }
+                          >
+                            {TYPE_OPTIONS.map((option) => (
+                              <option value={option.value} key={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown size={14} />
+                        </div>
+                        {type.kind === "CUSTOM" && (
+                          <input
+                            className="custom-type"
+                            value={type.customType ?? ""}
+                            onChange={(event) =>
+                              onCustomTypeChange(column, event.target.value)
+                            }
+                            placeholder="STRUCT(city VARCHAR)"
+                          />
+                        )}
+                      </>
                     )}
                   </td>
                 </tr>
@@ -335,6 +365,69 @@ function PairTable({
           ))}
         </div>
       )}
+      <details className="advanced-record-settings">
+        <summary>
+          <span>Define dependnet variables</span>
+          <ChevronDown size={16} />
+        </summary>
+        <div className="derived-column-settings">
+          {Object.entries(derivedColumns).map(([column, expression]) => (
+            <div className="derived-column-row" key={column}>
+              <code>{column}</code>
+              <input
+                aria-label={`${column} derived SQL expression`}
+                value={expression}
+                onChange={(event) =>
+                  onDerivedColumnChange(column, event.target.value)
+                }
+              />
+              <button
+                className="icon-button"
+                title={`Remove ${column} derivation`}
+                aria-label={`Remove ${column} derivation`}
+                onClick={() => onDerivedColumnChange(column)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+          <div className="derived-column-row derived-column-new">
+            <div className="type-select">
+              <select
+                aria-label="Derived output column"
+                value={newDerivedColumn}
+                onChange={(event) => setNewDerivedColumn(event.target.value)}
+              >
+                <option value="">Output column</option>
+                {availableDerivedColumns.map((column) => (
+                  <option value={column} key={column}>{column}</option>
+                ))}
+              </select>
+              <ChevronDown size={14} />
+            </div>
+            <input
+              aria-label="Derived SQL expression"
+              placeholder="first_name || ' ' || surname"
+              value={newDerivedExpression}
+              onChange={(event) => setNewDerivedExpression(event.target.value)}
+            />
+            <button
+              className="secondary-button"
+              disabled={!newDerivedColumn || !newDerivedExpression.trim()}
+              onClick={() => {
+                onDerivedColumnChange(newDerivedColumn, newDerivedExpression.trim());
+                setNewDerivedColumn("");
+                setNewDerivedExpression("");
+              }}
+            >
+              Add
+            </button>
+          </div>
+          {derivedColumnError && (
+            <div className="derived-column-error">{derivedColumnError}</div>
+          )}
+        </div>
+      </details>
     </section>
   );
 }
@@ -629,6 +722,7 @@ export function App() {
     {},
   );
   const [values, setValues] = useState<PairValues>(emptyValues);
+  const [resolvedValues, setResolvedValues] = useState<PairValues>(emptyValues);
   const [gammas, setGammas] = useState<Array<number | null>>([]);
   const [comparisonErrors, setComparisonErrors] = useState<
     Record<number, string>
@@ -645,9 +739,12 @@ export function App() {
   const [blockingRuleOutcomes, setBlockingRuleOutcomes] = useState<BlockingRuleOutcome[]>([]);
   const [downloading, setDownloading] = useState(false);
   const [tfAdjustments, setTfAdjustments] = useState<Record<string, number>>({});
+  const [derivedColumns, setDerivedColumns] = useState<Record<string, string>>({});
+  const [derivedColumnError, setDerivedColumnError] = useState<string>();
 
   const deferredValues = useDeferredValue(values);
   const deferredTypes = useDeferredValue(columnTypes);
+  const deferredDerivedColumns = useDeferredValue(derivedColumns);
 
   const loadModel = (nextModel: NormalizedModel, raw: string, name: string) => {
     setModel(nextModel);
@@ -657,6 +754,7 @@ export function App() {
     setColumns([]);
     setColumnTypes({});
     setValues(emptyValues);
+    setResolvedValues(emptyValues);
     setGammas([]);
     setComparisonErrors({});
     setEngineError(undefined);
@@ -665,6 +763,8 @@ export function App() {
     setShowActualValues(false);
     setDisplayedExpressions({});
     setBlockingRuleOutcomes([]);
+    setDerivedColumns(nextModel.example_data?.derived_columns ?? {});
+    setDerivedColumnError(undefined);
     setTfAdjustments(
       Object.fromEntries(
         nextModel.comparisons
@@ -710,6 +810,7 @@ export function App() {
         setFunctionExpressions(expressions);
         setColumnTypes(initialState.columnTypes);
         setValues(initialState.values);
+        setResolvedValues(initialState.values);
         setEngineState("ready");
       })
       .catch((reason: unknown) => {
@@ -729,7 +830,39 @@ export function App() {
   useEffect(() => {
     if (!model || engineState !== "ready" || columns.length === 0) return;
     let cancelled = false;
-    serializeExampleData(columns, deferredTypes, deferredValues)
+    materializeDerivedValues(
+      columns,
+      deferredTypes,
+      deferredValues,
+      deferredDerivedColumns,
+    )
+      .then((nextValues) => {
+        if (cancelled) return;
+        setResolvedValues(nextValues);
+        setDerivedColumnError(undefined);
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        setDerivedColumnError(
+          reason instanceof Error
+            ? reason.message
+            : "The derived column expression could not be evaluated.",
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [model, engineState, columns, deferredTypes, deferredValues, deferredDerivedColumns]);
+
+  useEffect(() => {
+    if (!model || engineState !== "ready" || columns.length === 0) return;
+    let cancelled = false;
+    serializeExampleData(
+      columns,
+      deferredTypes,
+      deferredValues,
+      deferredDerivedColumns,
+    )
       .then((exampleData) => {
         if (cancelled) return;
         setRawModel((current) => {
@@ -753,6 +886,7 @@ export function App() {
     columns,
     deferredTypes,
     deferredValues,
+    deferredDerivedColumns,
     tfAdjustments,
   ]);
 
@@ -774,6 +908,7 @@ export function App() {
         columns,
         deferredTypes,
         deferredValues,
+        deferredDerivedColumns,
       );
       setBlockingRuleOutcomes(
         blockingRules.map((rule) => ({ rule, state: "loading" })),
@@ -804,7 +939,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [model, engineState, columns, blockingRules, deferredTypes, deferredValues]);
+  }, [model, engineState, columns, blockingRules, deferredTypes, deferredValues, deferredDerivedColumns]);
 
   useEffect(() => {
     if (!model || engineState !== "ready" || columns.length === 0) return;
@@ -815,6 +950,7 @@ export function App() {
         columns,
         deferredTypes,
         deferredValues,
+        deferredDerivedColumns,
       );
       setGeneratedSql(sql);
       const comparisonSql = buildComparisonEvaluationSqls(
@@ -822,6 +958,7 @@ export function App() {
         columns,
         deferredTypes,
         deferredValues,
+        deferredDerivedColumns,
       );
       const queuedFunctions = functionExpressions.flatMap(
         (expressions, comparisonIndex) =>
@@ -832,6 +969,7 @@ export function App() {
         columns,
         deferredTypes,
         deferredValues,
+        deferredDerivedColumns,
       );
       setGammas(model.comparisons.map(() => null));
       setComparisonErrors({});
@@ -925,6 +1063,7 @@ export function App() {
     deferredValues,
     engineState,
     functionExpressions,
+    deferredDerivedColumns,
   ]);
 
   const results = useMemo<Array<ComparisonResult | null>>(() => {
@@ -962,7 +1101,7 @@ export function App() {
     const uniqueExpressions = [...new Set(expressions)];
     let cancelled = false;
     setDisplayedExpressions({});
-    substitutePairValues(uniqueExpressions, deferredTypes, deferredValues)
+    substitutePairValues(uniqueExpressions, deferredTypes, resolvedValues)
       .then((substituted) => {
         if (!cancelled) {
           setDisplayedExpressions(
@@ -981,7 +1120,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [showActualValues, results, functionOutcomes, deferredTypes, deferredValues]);
+  }, [showActualValues, results, functionOutcomes, deferredTypes, resolvedValues]);
 
   const successfulResults = useMemo(
     () =>
@@ -1005,9 +1144,9 @@ export function App() {
   const waterfallRows = useMemo(
     () =>
       hasCompleteResults && model
-        ? waterfallData(model, successfulResults, deferredValues, columns)
+        ? waterfallData(model, successfulResults, resolvedValues, columns)
         : [],
-    [model, successfulResults, deferredValues, columns, hasCompleteResults],
+    [model, successfulResults, resolvedValues, columns, hasCompleteResults],
   );
   const waterfallChart = useMemo(
     () => waterfallSpec(waterfallRows),
@@ -1046,13 +1185,22 @@ export function App() {
     }));
   };
   const setEverythingNull = () => {
-    const nullValues = Object.fromEntries(columns.map((column) => [column, null]));
+    const nullValues = Object.fromEntries(
+      columns
+        .filter((column) => !(column in derivedColumns))
+        .map((column) => [column, null]),
+    );
     setValues({ left: { ...nullValues }, right: { ...nullValues } });
   };
   const downloadSettings = async () => {
     setDownloading(true);
     try {
-      const exampleData = await serializeExampleData(columns, columnTypes, values);
+      const exampleData = await serializeExampleData(
+        columns,
+        columnTypes,
+        values,
+        derivedColumns,
+      );
       const settings = JSON.parse(rawModel) as Record<string, unknown>;
       settings.example_data = {
         ...exampleData,
@@ -1278,6 +1426,9 @@ export function App() {
               columns={columns}
               columnTypes={columnTypes}
               values={values}
+              resolvedValues={resolvedValues}
+              derivedColumns={derivedColumns}
+              derivedColumnError={derivedColumnError}
               tfAdjustmentColumns={model.comparisons
                 .filter((comparison) =>
                   comparison.comparison_levels.some(
@@ -1294,6 +1445,16 @@ export function App() {
                 }))
               }
               onValueChange={updateValue}
+              onDerivedColumnChange={(column, expression) =>
+                setDerivedColumns((current) => {
+                  if (expression === undefined) {
+                    const next = { ...current };
+                    delete next[column];
+                    return next;
+                  }
+                  return { ...current, [column]: expression };
+                })
+              }
               onTfAdjustmentChange={(column, value) =>
                 setTfAdjustments((current) => ({
                   ...current,
@@ -1367,7 +1528,7 @@ export function App() {
                 </button>
               </div>
             </div>
-            <PairPreview columns={columns} values={deferredValues} />
+            <PairPreview columns={columns} values={resolvedValues} />
             <div className="comparison-list">
               {model.comparisons.map((comparison, index) => {
                 const result = results[index];

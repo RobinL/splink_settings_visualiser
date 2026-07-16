@@ -67,6 +67,7 @@ export interface SplinkExampleData {
   column_types: Record<string, ColumnType>;
   record_l: Record<string, unknown>;
   record_r: Record<string, unknown>;
+  derived_columns?: Record<string, string>;
   term_frequency_adjustments?: Record<string, number>;
 }
 

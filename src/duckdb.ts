@@ -253,6 +253,12 @@ export async function discoverColumns(model: NormalizedModel): Promise<string[]>
         if (level.tf_adjustment_column) columns.push(level.tf_adjustment_column);
       });
     });
+    for (const expression of Object.values(model.example_data?.derived_columns ?? {})) {
+      const derivedAst = await parseSqlAst(connection, `SELECT ${expression}`);
+      const derivedReferences = new Set<string>();
+      collectColumnReferences(derivedAst, derivedReferences);
+      columns.push(...derivedReferences);
+    }
     return [...new Set(columns)];
   } finally {
     await connection.close();
@@ -461,36 +467,58 @@ export async function substitutePairValues(
   }
 }
 
-function pairCte(
-  columns: string[],
-  columnTypes: Record<string, ColumnType>,
-  values: PairValues,
-): string {
-  const pairColumns = columns.flatMap((column) => {
-    const type = columnTypes[column] ?? { kind: "VARCHAR" as const };
-    const left = values.left[column] === undefined ? "" : values.left[column];
-    const right = values.right[column] === undefined ? "" : values.right[column];
-    return [
-      `${typedLiteral(left, type)} AS ${quoteIdentifier(`${column}_l`)}`,
-      `${typedLiteral(right, type)} AS ${quoteIdentifier(`${column}_r`)}`,
-    ];
-  });
-  return `WITH pair AS (SELECT\n  ${pairColumns.join(",\n  ")}\n)`;
-}
-
-function recordCte(
+function recordCtes(
   alias: "l" | "r",
   side: keyof PairValues,
   columns: string[],
   columnTypes: Record<string, ColumnType>,
   values: PairValues,
-): string {
-  const projected = columns.map((column) => {
-    const type = columnTypes[column] ?? { kind: "VARCHAR" as const };
-    const raw = values[side][column] === undefined ? "" : values[side][column];
-    return `${typedLiteral(raw, type)} AS ${quoteIdentifier(column)}`;
+  derivedColumns: Record<string, string>,
+): string[] {
+  const derivations = Object.entries(derivedColumns).filter(
+    ([column, expression]) => columns.includes(column) && expression.trim(),
+  );
+  const derivedNames = new Set(derivations.map(([column]) => column));
+  const projected = columns
+    .filter((column) => !derivedNames.has(column))
+    .map((column) => {
+      const type = columnTypes[column] ?? { kind: "VARCHAR" as const };
+      const raw = values[side][column] === undefined ? "" : values[side][column];
+      return `${typedLiteral(raw, type)} AS ${quoteIdentifier(column)}`;
+    });
+  const baseName = `${alias}_base`;
+  const ctes = [
+    `${baseName} AS (SELECT\n  ${projected.length > 0 ? projected.join(",\n  ") : "1 AS __placeholder"}\n)`,
+  ];
+  let source = baseName;
+  derivations.forEach(([column, expression], index) => {
+    const target = `${alias}_derived_${index}`;
+    ctes.push(
+      `${target} AS (SELECT *, (${expression}) AS ${quoteIdentifier(column)} FROM ${source})`,
+    );
+    source = target;
   });
-  return `${alias} AS (SELECT\n  ${projected.join(",\n  ")}\n)`;
+  ctes.push(`${alias} AS (SELECT * FROM ${source})`);
+  return ctes;
+}
+
+function pairCte(
+  columns: string[],
+  columnTypes: Record<string, ColumnType>,
+  values: PairValues,
+  derivedColumns: Record<string, string>,
+): string {
+  const records = [
+    ...recordCtes("l", "left", columns, columnTypes, values, derivedColumns),
+    ...recordCtes("r", "right", columns, columnTypes, values, derivedColumns),
+  ];
+  const pairColumns = columns.flatMap((column) => {
+    return [
+      `l.${quoteIdentifier(column)} AS ${quoteIdentifier(`${column}_l`)}`,
+      `r.${quoteIdentifier(column)} AS ${quoteIdentifier(`${column}_r`)}`,
+    ];
+  });
+  return `WITH ${records.join(",\n")},\npair AS (SELECT\n  ${pairColumns.join(",\n  ")}\nFROM l CROSS JOIN r\n)`;
 }
 
 export function buildBlockingRuleEvaluationSqls(
@@ -498,8 +526,12 @@ export function buildBlockingRuleEvaluationSqls(
   columns: string[],
   columnTypes: Record<string, ColumnType>,
   values: PairValues,
+  derivedColumns: Record<string, string> = {},
 ): string[] {
-  const records = `WITH ${recordCte("l", "left", columns, columnTypes, values)},\n${recordCte("r", "right", columns, columnTypes, values)}`;
+  const records = `WITH ${[
+    ...recordCtes("l", "left", columns, columnTypes, values, derivedColumns),
+    ...recordCtes("r", "right", columns, columnTypes, values, derivedColumns),
+  ].join(",\n")}`;
   return rules.map(
     (rule) =>
       `${records}\nSELECT COALESCE((${rule}), FALSE) AS function_value\nFROM l CROSS JOIN r`,
@@ -511,11 +543,12 @@ export function buildEvaluationSql(
   columns: string[],
   columnTypes: Record<string, ColumnType>,
   values: PairValues,
+  derivedColumns: Record<string, string> = model.example_data?.derived_columns ?? {},
 ): string {
   const gammas = model.comparisons.map((comparison, index) =>
     comparisonCase(comparison, `gamma_${index}`),
   );
-  return `${pairCte(columns, columnTypes, values)}\nSELECT\n  ${gammas.join(",\n  ")}\nFROM pair`;
+  return `${pairCte(columns, columnTypes, values, derivedColumns)}\nSELECT\n  ${gammas.join(",\n  ")}\nFROM pair`;
 }
 
 export function buildComparisonEvaluationSqls(
@@ -523,6 +556,7 @@ export function buildComparisonEvaluationSqls(
   columns: string[],
   columnTypes: Record<string, ColumnType>,
   values: PairValues,
+  derivedColumns: Record<string, string> = model.example_data?.derived_columns ?? {},
 ): string[] {
   return model.comparisons.map((comparison) =>
     buildEvaluationSql(
@@ -530,6 +564,7 @@ export function buildComparisonEvaluationSqls(
       columns,
       columnTypes,
       values,
+      derivedColumns,
     ),
   );
 }
@@ -539,8 +574,9 @@ export function buildFunctionEvaluationSqls(
   columns: string[],
   columnTypes: Record<string, ColumnType>,
   values: PairValues,
+  derivedColumns: Record<string, string> = {},
 ): string[] {
-  const pair = pairCte(columns, columnTypes, values);
+  const pair = pairCte(columns, columnTypes, values, derivedColumns);
   return expressions.map(
     (expression) => `${pair}\nSELECT ${expression} AS function_value\nFROM pair`,
   );
@@ -572,23 +608,65 @@ export async function evaluateExpression(sql: string): Promise<unknown> {
   }
 }
 
+export async function materializeDerivedValues(
+  columns: string[],
+  columnTypes: Record<string, ColumnType>,
+  values: PairValues,
+  derivedColumns: Record<string, string>,
+): Promise<PairValues> {
+  const derivedNames = columns.filter((column) => column in derivedColumns);
+  if (derivedNames.length === 0) return values;
+  const database = await getDatabase();
+  const connection = await database.connect();
+  try {
+    const projections = derivedNames.flatMap((column) =>
+      (["l", "r"] as const).map(
+        (suffix) =>
+          `CAST(${quoteIdentifier(`${column}_${suffix}`)} AS VARCHAR) AS ${quoteIdentifier(`${column}_${suffix}`)}`,
+      ),
+    );
+    const result = await connection.query(
+      `${pairCte(columns, columnTypes, values, derivedColumns)}\nSELECT\n  ${projections.join(",\n  ")}\nFROM pair`,
+    );
+    const row = result.toArray()[0] as Record<string, unknown> | undefined;
+    if (!row) throw new Error("DuckDB returned no derived record values.");
+    const resolved: PairValues = {
+      left: { ...values.left },
+      right: { ...values.right },
+    };
+    for (const column of derivedNames) {
+      const left = row[`${column}_l`];
+      const right = row[`${column}_r`];
+      resolved.left[column] = left === null ? null : String(left);
+      resolved.right[column] = right === null ? null : String(right);
+    }
+    return resolved;
+  } finally {
+    await connection.close();
+  }
+}
+
 export async function serializeExampleData(
   columns: string[],
   columnTypes: Record<string, ColumnType>,
   values: PairValues,
+  derivedColumns: Record<string, string> = {},
 ): Promise<SplinkExampleData> {
   const database = await getDatabase();
   const connection = await database.connect();
   try {
+    const serializableColumns = columns.filter(
+      (column) => !(column in derivedColumns),
+    );
     const jsonArguments = (suffix: "l" | "r") =>
-      columns
+      serializableColumns
         .flatMap((column) => [
           quoteString(column),
           quoteIdentifier(`${column}_${suffix}`),
         ])
         .join(", ");
     const result = await connection.query(
-      `${pairCte(columns, columnTypes, values)}\nSELECT\n` +
+      `${pairCte(columns, columnTypes, values, derivedColumns)}\nSELECT\n` +
         `  CAST(json_object(${jsonArguments("l")}) AS VARCHAR) AS record_l,\n` +
         `  CAST(json_object(${jsonArguments("r")}) AS VARCHAR) AS record_r\n` +
         "FROM pair",
@@ -598,13 +676,15 @@ export async function serializeExampleData(
     return {
       version: 1,
       column_types: Object.fromEntries(
-        columns.map((column) => [
+        serializableColumns.map((column) => [
           column,
           columnTypes[column] ?? { kind: "VARCHAR" as const },
         ]),
       ),
       record_l: JSON.parse(String(row.record_l)) as Record<string, unknown>,
       record_r: JSON.parse(String(row.record_r)) as Record<string, unknown>,
+      derived_columns:
+        Object.keys(derivedColumns).length > 0 ? derivedColumns : undefined,
     };
   } finally {
     await connection.close();
