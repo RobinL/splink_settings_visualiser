@@ -39,7 +39,6 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 .file-mark { width: 68px; height: 68px; display: grid; place-items: center; color: var(--green); background: var(--green-soft); border-radius: 50%; }
 .drop-zone h2 { margin: 23px 0 6px; font-size: 23px; }
 .drop-zone p { color: var(--muted); margin: 0 0 28px; }
-.drop-zone .drop-zone-description { max-width: 430px; margin-top: -16px; font-size: 13px; line-height: 1.5; }
 .load-actions, .modal-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .primary-load-actions { justify-content: center; }
 .drop-zone .example-load-label { width: 100%; margin: 20px 0 8px; color: var(--ink); text-align: left; font-size: 13px; font-weight: 600; }
@@ -99,6 +98,59 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 .section-title h2 { margin: 0 0 5px; font-size: 21px; }
 .section-title p:last-child { margin: 0; color: var(--muted); font-size: 13px; }
 .section-title > svg { color: var(--green); }
+.match-weight-chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--green);
+}
+.switch-control {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.switch-control input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.switch-track {
+  width: 34px;
+  height: 18px;
+  position: relative;
+  flex: 0 0 auto;
+  border: 1px solid #aaa69c;
+  border-radius: 9px;
+  background: #d8d5ce;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.switch-track::after {
+  content: "";
+  width: 12px;
+  height: 12px;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  transition: transform 160ms ease;
+}
+.switch-control input:checked + .switch-track {
+  background: #ffd400;
+  border-color: #d6ad00;
+}
+.switch-control input:checked + .switch-track::after {
+  transform: translateX(16px);
+}
+.switch-control input:focus-visible + .switch-track {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
 .model-summary { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 45px; }
 .model-summary .section-title { margin: 0; }
 .model-summary pre { max-height: 300px; margin: 0; padding-left: 24px; overflow: auto; white-space: pre-wrap; border-left: 2px solid var(--gold); color: #4b4943; font-family: "IBM Plex Sans", sans-serif; font-size: 13px; line-height: 1.6; }
@@ -504,6 +556,24 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
   width: min(900px, calc(100% - 40px));
   margin: 40px auto;
   padding: 0;
+}
+
+.tool-introduction {
+  margin-bottom: 24px;
+}
+
+.tool-introduction h3 {
+  margin: 0 0 6px;
+  color: #000;
+  font-size: 18px;
+}
+
+.tool-introduction p {
+  max-width: 720px;
+  margin: 0;
+  color: #444;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .drop-zone {

@@ -570,6 +570,13 @@ function EmptyState({
             </span>
           </div>
         </div>
+        <div className="tool-introduction">
+          <h3>What is this tool?</h3>
+          <p>
+            This webpage converts a Splink settings .json into a live, in browser
+            Splink model where you can input records and view match scores.
+          </p>
+        </div>
         <div
           className={`drop-zone ${dragging ? "dragging" : ""}`}
           onDragEnter={() => setDragging(true)}
@@ -583,10 +590,6 @@ function EmptyState({
           <h2>Open a Splink model</h2>
           <p>
             Drop a <strong>model.json</strong> here, or choose how to load it.
-          </p>
-          <p className="drop-zone-description">
-            Convert Splink settings .json into a live, in browser Splink model
-            where you can input records and view match scores.
           </p>
           <div className="load-actions primary-load-actions">
             <button
@@ -745,6 +748,8 @@ export function App() {
   const [tfAdjustments, setTfAdjustments] = useState<Record<string, number>>({});
   const [derivedColumns, setDerivedColumns] = useState<Record<string, string>>({});
   const [derivedColumnError, setDerivedColumnError] = useState<string>();
+  const [highlightActivatedWeights, setHighlightActivatedWeights] =
+    useState(false);
 
   const deferredValues = useDeferredValue(values);
   const deferredTypes = useDeferredValue(columnTypes);
@@ -767,6 +772,7 @@ export function App() {
     setShowActualValues(false);
     setDisplayedExpressions({});
     setBlockingRuleOutcomes([]);
+    setHighlightActivatedWeights(false);
     setDerivedColumns(nextModel.example_data?.derived_columns ?? {});
     setDerivedColumnError(undefined);
     setTfAdjustments(
@@ -1137,8 +1143,12 @@ export function App() {
 
   const parameterData = useMemo(() => (model ? chartData(model) : []), [model]);
   const matchWeightsChart = useMemo(
-    () => matchWeightsSpec(parameterData),
-    [parameterData],
+    () =>
+      matchWeightsSpec(
+        parameterData,
+        highlightActivatedWeights ? successfulResults : [],
+      ),
+    [parameterData, highlightActivatedWeights, successfulResults],
   );
   const muChart = useMemo(
     () => muParametersSpec(parameterData),
@@ -1375,7 +1385,21 @@ export function App() {
                   it.
                 </p>
               </div>
-              <Gauge size={20} />
+              <div className="match-weight-chart-controls">
+                <label className="switch-control">
+                  <span>Highlight activated match weights</span>
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    checked={highlightActivatedWeights}
+                    onChange={(event) =>
+                      setHighlightActivatedWeights(event.target.checked)
+                    }
+                  />
+                  <span className="switch-track" aria-hidden="true" />
+                </label>
+                <Gauge size={20} />
+              </div>
             </div>
             <VegaChart
               spec={matchWeightsChart}

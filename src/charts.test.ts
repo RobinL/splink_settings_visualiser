@@ -9,6 +9,7 @@ import {
   waterfallSpec,
 } from "./charts";
 import { chartData, matchWeight, parseModel } from "./model";
+import type { ChartDatum } from "./types";
 
 interface MutableMatchWeightsSpec {
   data: { values: unknown };
@@ -72,6 +73,37 @@ describe("Splink Vega-Lite specifications", () => {
     expected.vconcat[1].encoding.x.scale.domain = [-maxValue, maxValue];
 
     expect(matchWeightsSpec(data)).toEqual(expected);
+  });
+
+  it("adds a yellow border to activated match-weight bars when requested", () => {
+    const data = chartData(model);
+    const level = model.comparisons[0].comparison_levels[1];
+    const spec = matchWeightsSpec(data, [
+      {
+        comparison: model.comparisons[0],
+        gamma: level.comparison_vector_value,
+        level,
+        matchWeight: matchWeight(level),
+        tfAdjustment: 0,
+      },
+    ]) as unknown as {
+      data: { values: Array<ChartDatum & { is_activated: boolean }> };
+      vconcat: Array<{ encoding: Record<string, unknown> }>;
+    };
+
+    expect(
+      spec.data.values.find(
+        (record) => record.comparison_name === "name" && record.is_activated,
+      )?.comparison_vector_value,
+    ).toBe(level.comparison_vector_value);
+    expect(spec.vconcat[1].encoding.stroke).toEqual({
+      condition: { test: "datum.is_activated", value: "#ffd400" },
+      value: null,
+    });
+    expect(spec.vconcat[1].encoding.strokeWidth).toEqual({
+      condition: { test: "datum.is_activated", value: 3 },
+      value: 0,
+    });
   });
 
   it("uses the m/u template with Splink's static-chart mutations", () => {

@@ -22,7 +22,13 @@ interface SplinkMatchWeightsSpec {
   transform?: unknown;
   vconcat: [
     { encoding: { x: { scale: { domain: number[] } } } },
-    { encoding: { x: { scale: { domain: number[] } } } },
+    {
+      encoding: {
+        x: { scale: { domain: number[] } };
+        stroke?: unknown;
+        strokeWidth?: unknown;
+      };
+    },
   ];
 }
 
@@ -38,11 +44,37 @@ interface SplinkWaterfallSpec {
   transform: unknown[];
 }
 
-export function matchWeightsSpec(data: ChartDatum[]): VisualizationSpec {
+export function matchWeightsSpec(
+  data: ChartDatum[],
+  activatedResults: ComparisonResult[] = [],
+): VisualizationSpec {
   const spec = structuredClone(matchWeightsTemplate) as unknown as SplinkMatchWeightsSpec;
   delete spec.params;
   delete spec.transform;
-  spec.data.values = data;
+  if (activatedResults.length === 0) {
+    spec.data.values = data;
+  } else {
+    const activatedLevels = new Set(
+      activatedResults.map(
+        (result) =>
+          `${result.comparison.output_column_name}:${result.gamma}`,
+      ),
+    );
+    spec.data.values = data.map((record) => ({
+      ...record,
+      is_activated: activatedLevels.has(
+        `${record.comparison_name}:${record.comparison_vector_value}`,
+      ),
+    }));
+    spec.vconcat[1].encoding.stroke = {
+      condition: { test: "datum.is_activated", value: "#ffd400" },
+      value: null,
+    };
+    spec.vconcat[1].encoding.strokeWidth = {
+      condition: { test: "datum.is_activated", value: 3 },
+      value: 0,
+    };
+  }
 
   const finiteWeights = data
     .map((record) => record.log2_bayes_factor)
