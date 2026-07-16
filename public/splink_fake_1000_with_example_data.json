@@ -5,7 +5,7 @@
     "retain_intermediate_calculation_columns": false,
     "additional_columns_to_retain": [],
     "sql_dialect": "duckdb",
-    "linker_uid": "3ejrrzsu",
+    "linker_uid": "8bt0rx18",
     "em_convergence": 0.0001,
     "max_iterations": 2,
     "match_weight_column_prefix": "mw_",
@@ -127,6 +127,7 @@
                 {
                     "sql_condition": "\"dob_l\" = \"dob_r\"",
                     "label_for_charts": "Exact match on dob",
+                    "m_probability": 0.4330482772343303,
                     "u_probability": 0.0018599835094245557,
                     "fix_m_probability": false,
                     "fix_u_probability": false
@@ -134,6 +135,7 @@
                 {
                     "sql_condition": "levenshtein(\"dob_l\", \"dob_r\") <= 1",
                     "label_for_charts": "Levenshtein distance of dob <= 1",
+                    "m_probability": 0.16517388919053413,
                     "u_probability": 0.0014764817549040286,
                     "fix_m_probability": false,
                     "fix_u_probability": false
@@ -141,6 +143,7 @@
                 {
                     "sql_condition": "levenshtein(\"dob_l\", \"dob_r\") <= 2",
                     "label_for_charts": "Levenshtein distance of dob <= 2",
+                    "m_probability": 0.22528991387350913,
                     "u_probability": 0.015694809303752565,
                     "fix_m_probability": false,
                     "fix_u_probability": false
@@ -148,6 +151,7 @@
                 {
                     "sql_condition": "ELSE",
                     "label_for_charts": "All other comparisons",
+                    "m_probability": 0.1764879197016265,
                     "u_probability": 0.9809687254319188,
                     "fix_m_probability": false,
                     "fix_u_probability": false
@@ -168,7 +172,7 @@
                 {
                     "sql_condition": "\"city_l\" = \"city_r\"",
                     "label_for_charts": "Exact match on city",
-                    "m_probability": 0.5925914768803582,
+                    "m_probability": 0.5969692977009742,
                     "u_probability": 0.11090275917492633,
                     "fix_m_probability": false,
                     "fix_u_probability": false,
@@ -178,7 +182,7 @@
                 {
                     "sql_condition": "ELSE",
                     "label_for_charts": "All other comparisons",
-                    "m_probability": 0.40740852311964193,
+                    "m_probability": 0.4030307022990258,
                     "u_probability": 0.8890972408250737,
                     "fix_m_probability": false,
                     "fix_u_probability": false
@@ -199,7 +203,7 @@
                 {
                     "sql_condition": "\"email_l\" = \"email_r\"",
                     "label_for_charts": "Exact match on email",
-                    "m_probability": 0.6022794003463573,
+                    "m_probability": 0.6149632798240176,
                     "u_probability": 0.0019880715705765406,
                     "fix_m_probability": false,
                     "fix_u_probability": false
@@ -207,7 +211,7 @@
                 {
                     "sql_condition": "ELSE",
                     "label_for_charts": "All other comparisons",
-                    "m_probability": 0.39772059965364276,
+                    "m_probability": 0.38503672017598245,
                     "u_probability": 0.9980119284294234,
                     "fix_m_probability": false,
                     "fix_u_probability": false
@@ -245,7 +249,7 @@
         "record_r": {
             "first_name": "John",
             "surname": "Smyth",
-            "dob": null,
+            "dob": "1990-01-02",
             "city": "London",
             "email": "john.smyth@example.com"
         }
