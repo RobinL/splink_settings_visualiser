@@ -1571,6 +1571,7 @@ export function App() {
                   label="Waterfall of pair match-weight contributions"
                   className="waterfall-chart"
                 />
+                <PairPreview columns={columns} values={resolvedValues} />
               </div>
             </details>
           )}
@@ -1652,7 +1653,6 @@ export function App() {
                 </button>
               </div>
             </div>
-            <PairPreview columns={columns} values={resolvedValues} />
             <div className="comparison-list">
               {model.comparisons.map((comparison, index) => {
                 const result = results[index];
