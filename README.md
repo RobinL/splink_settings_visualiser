@@ -47,4 +47,4 @@ pnpm run deploy
 ```
 
 The same script can be run with `npm run deploy`. The deployed project is served
-at <https://robinlinacre.com/splink_settings_visualiser/>.
+at <https://robinlinacre.com/>.
