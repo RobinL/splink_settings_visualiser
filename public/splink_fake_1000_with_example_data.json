@@ -173,11 +173,21 @@
     "example_data": {
         "version": 1,
         "column_types": {
-            "first_name": { "kind": "VARCHAR" },
-            "surname": { "kind": "VARCHAR" },
-            "dob": { "kind": "DATE" },
-            "city": { "kind": "VARCHAR" },
-            "email": { "kind": "VARCHAR" }
+            "first_name": {
+                "kind": "VARCHAR"
+            },
+            "surname": {
+                "kind": "VARCHAR"
+            },
+            "dob": {
+                "kind": "DATE"
+            },
+            "city": {
+                "kind": "VARCHAR"
+            },
+            "email": {
+                "kind": "VARCHAR"
+            }
         },
         "record_l": {
             "first_name": "John",
