@@ -31,6 +31,7 @@ import {
 } from "./charts";
 import {
   buildComparisonEvaluationSqls,
+  buildBlockingRuleEvaluationSqls,
   buildEvaluationSql,
   buildFunctionEvaluationSqls,
   discoverColumns,
@@ -39,10 +40,12 @@ import {
   evaluatePair,
   inferColumnTypes,
   substitutePairValues,
+  valuesForColumnTypes,
 } from "./duckdb";
 import { examplePairValues } from "./heuristics";
 import {
   chartData,
+  blockingRuleSql,
   finalMatchWeight,
   humanReadableDescription,
   matchWeight,
@@ -122,6 +125,12 @@ interface FunctionOutcome {
   expression: string;
   state: "loading" | "ready" | "error";
   value?: string;
+}
+
+interface BlockingRuleOutcome {
+  rule: string;
+  state: "loading" | "ready" | "error";
+  activated?: boolean;
 }
 
 function InputEditor({
@@ -294,6 +303,36 @@ function PairTable({
   );
 }
 
+function PairPreview({ columns, values }: { columns: string[]; values: PairValues }) {
+  return (
+    <div className="pair-preview">
+      <div className="record-grid-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Record</th>
+              {columns.map((column) => <th key={column}>{column}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {(["left", "right"] as Side[]).map((side) => (
+              <tr key={side}>
+                <th>{side === "left" ? "Record L" : "Record R"}</th>
+                {columns.map((column) => (
+                  <td key={column}>
+                    <code>{pairValue(values, side, column) ?? "NULL"}</code>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p>Change the values in the form above to change this data</p>
+    </div>
+  );
+}
+
 function FunctionValues({
   outcomes,
   displayedExpressions,
@@ -335,6 +374,7 @@ function EmptyState({
   const [pasteValue, setPasteValue] = useState("");
   const [error, setError] = useState<string>();
   const [dragging, setDragging] = useState(false);
+  const [loadingExample, setLoadingExample] = useState(false);
 
   const ingest = (raw: string, name: string) => {
     try {
@@ -359,6 +399,23 @@ function EmptyState({
       );
     }
   };
+  const loadExample = async () => {
+    setLoadingExample(true);
+    setError(undefined);
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}50k.json`);
+      if (!response.ok) throw new Error("The 50k example could not be loaded.");
+      ingest(await response.text(), "50k.json");
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "The 50k example could not be loaded.",
+      );
+    } finally {
+      setLoadingExample(false);
+    }
+  };
   const drop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(false);
@@ -369,15 +426,15 @@ function EmptyState({
     <main className="welcome-shell">
       <header className="welcome-brand">
         <Database size={24} />
-        <span>Splink Model Studio</span>
+        <span>Splink model visualiser</span>
       </header>
       <section className="welcome-content">
         <div className="welcome-copy">
           <p className="eyebrow">DuckDB model inspector</p>
-          <h1>See what your linkage model has learned.</h1>
+          <h1>Splink model visualiser</h1>
           <p>
-            Load a serialized Splink model to inspect its parameters, test
-            record pairs, and trace every contribution to the final match score.
+            See what your linkage model has learned. Inspect its parameters,
+            test record pairs, and trace every contribution to the final match score.
           </p>
           <div className="privacy-note">
             <Check size={16} />
@@ -414,6 +471,18 @@ function EmptyState({
             >
               <ClipboardPaste size={17} />
               Paste JSON
+            </button>
+            <button
+              className="secondary-button"
+              disabled={loadingExample}
+              onClick={() => void loadExample()}
+            >
+              {loadingExample ? (
+                <LoaderCircle className="spin" size={17} />
+              ) : (
+                <FileJson size={17} />
+              )}
+              Load 50k example
             </button>
           </div>
           <input
@@ -510,6 +579,7 @@ export function App() {
   const [functionOutcomes, setFunctionOutcomes] = useState<FunctionOutcome[][]>([]);
   const [showActualValues, setShowActualValues] = useState(false);
   const [displayedExpressions, setDisplayedExpressions] = useState<Record<string, string>>({});
+  const [blockingRuleOutcomes, setBlockingRuleOutcomes] = useState<BlockingRuleOutcome[]>([]);
 
   const deferredValues = useDeferredValue(values);
   const deferredTypes = useDeferredValue(columnTypes);
@@ -529,6 +599,7 @@ export function App() {
     setFunctionOutcomes([]);
     setShowActualValues(false);
     setDisplayedExpressions({});
+    setBlockingRuleOutcomes([]);
   };
 
   useEffect(() => {
@@ -546,10 +617,14 @@ export function App() {
       })
       .then(({ discovered, exampleValues, expressions, inferredTypes }) => {
         if (cancelled) return;
+        const compatibleValues = valuesForColumnTypes(
+          exampleValues,
+          inferredTypes,
+        );
         setColumns(discovered);
         setFunctionExpressions(expressions);
         setColumnTypes(inferredTypes);
-        setValues(exampleValues);
+        setValues(compatibleValues);
         setEngineState("ready");
       })
       .catch((reason: unknown) => {
@@ -565,6 +640,56 @@ export function App() {
       cancelled = true;
     };
   }, [model]);
+
+  const blockingRules = useMemo(
+    () => (model ? blockingRuleSql(model) : []),
+    [model],
+  );
+
+  useEffect(() => {
+    if (!model || engineState !== "ready" || columns.length === 0) return;
+    if (blockingRules.length === 0) {
+      setBlockingRuleOutcomes([]);
+      return;
+    }
+    let cancelled = false;
+    try {
+      const statements = buildBlockingRuleEvaluationSqls(
+        blockingRules,
+        columns,
+        deferredTypes,
+        deferredValues,
+      );
+      setBlockingRuleOutcomes(
+        blockingRules.map((rule) => ({ rule, state: "loading" })),
+      );
+      Promise.all(
+        statements.map(async (statement, index) => {
+          try {
+            return {
+              rule: blockingRules[index],
+              state: "ready" as const,
+              activated: Boolean(await evaluateExpression(statement)),
+            };
+          } catch {
+            return {
+              rule: blockingRules[index],
+              state: "error" as const,
+            };
+          }
+        }),
+      ).then((outcomes) => {
+        if (!cancelled) setBlockingRuleOutcomes(outcomes);
+      });
+    } catch {
+      setBlockingRuleOutcomes(
+        blockingRules.map((rule) => ({ rule, state: "error" })),
+      );
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [model, engineState, columns, blockingRules, deferredTypes, deferredValues]);
 
   useEffect(() => {
     if (!model || engineState !== "ready" || columns.length === 0) return;
@@ -809,7 +934,7 @@ export function App() {
       <header className="app-header">
         <div className="brand">
           <Database size={21} />
-          <span>Splink Model Studio</span>
+          <span>Splink model visualiser</span>
         </div>
         <div className="model-source">
           <FileJson size={15} />
@@ -1036,6 +1161,7 @@ export function App() {
                 </button>
               </div>
             </div>
+            <PairPreview columns={columns} values={deferredValues} />
             <div className="comparison-list">
               {model.comparisons.map((comparison, index) => {
                 const result = results[index];
@@ -1046,16 +1172,13 @@ export function App() {
                   >
                     <summary className="comparison-head">
                       <div>
-                        <span className="comparison-number">
-                          {String(index + 1).padStart(2, "0")}
-                        </span>
                         <h3>{comparison.output_column_name}</h3>
+                        <span className="comparison-expand-hint">
+                          (<span className="expand-label">click to expand</span>
+                          <span className="collapse-label">click to collapse</span>)
+                          <ChevronDown size={17} />
+                        </span>
                       </div>
-                      <span className="comparison-expand-hint">
-                        <span className="expand-label">Click to expand</span>
-                        <span className="collapse-label">Click to collapse</span>
-                        <ChevronDown size={17} />
-                      </span>
                     </summary>
                     <div className="comparison-content">
                       <div className="activated-level">
@@ -1114,6 +1237,31 @@ export function App() {
               })}
             </div>
           </section>
+          {blockingRules.length > 0 && (
+            <section className="blocking-rules-section">
+              <div className="section-title">
+                <div>
+                  <h2>Blocking rule hits</h2>
+                </div>
+              </div>
+              <div className="blocking-rule-list">
+                {blockingRuleOutcomes.map((outcome, index) => (
+                  <div className="blocking-rule-row" key={`${index}-${outcome.rule}`}>
+                    <code>{outcome.rule}</code>
+                    <span className={`blocking-rule-status ${outcome.state === "ready" && outcome.activated ? "activated" : ""}`}>
+                      {outcome.state === "loading"
+                        ? "Evaluating"
+                        : outcome.state === "error"
+                          ? "Unavailable"
+                          : outcome.activated
+                            ? "Activated"
+                            : "Not activated"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
           {generatedSql && (
             <details className="sql-panel">
               <summary>
@@ -1131,15 +1279,23 @@ export function App() {
 
       {
         <main className="dashboard-main model-main">
-          <section className="page-heading">
-            <div>
-              <h1>Settings</h1>
-              <p>The formatted JSON loaded into this browser tab.</p>
+          <details className="comparison-widget settings-disclosure">
+            <summary className="comparison-head">
+              <div>
+                <h2>Settings</h2>
+                <span className="comparison-expand-hint">
+                  (<span className="expand-label">click to expand</span>
+                  <span className="collapse-label">click to collapse</span>)
+                  <ChevronDown size={17} />
+                </span>
+              </div>
+            </summary>
+            <div className="comparison-content">
+              <section className="json-view">
+                <pre>{JSON.stringify(JSON.parse(rawModel), null, 2)}</pre>
+              </section>
             </div>
-          </section>
-          <section className="json-view">
-            <pre>{JSON.stringify(JSON.parse(rawModel), null, 2)}</pre>
-          </section>
+          </details>
         </main>
       }
     </div>

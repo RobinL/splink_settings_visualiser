@@ -24,6 +24,12 @@ export function parseModel(value: unknown): NormalizedModel {
   }
 
   const model = value as unknown as SplinkModel;
+  if (
+    model.blocking_rules_to_generate_predictions !== undefined &&
+    !Array.isArray(model.blocking_rules_to_generate_predictions)
+  ) {
+    throw new Error("blocking_rules_to_generate_predictions must be an array.");
+  }
   const comparisons: NormalizedComparison[] = model.comparisons.map((comparison, index) => {
     if (!comparison.output_column_name || !Array.isArray(comparison.comparison_levels)) {
       throw new Error(`Comparison ${index + 1} is missing its name or levels.`);
@@ -44,6 +50,13 @@ export function parseModel(value: unknown): NormalizedModel {
     return { ...comparison, comparison_levels: levels };
   });
   return { ...model, comparisons };
+}
+
+export function blockingRuleSql(model: NormalizedModel): string[] {
+  return (model.blocking_rules_to_generate_predictions ?? []).flatMap((rule) => {
+    const sql = typeof rule === "string" ? rule : rule.blocking_rule;
+    return typeof sql === "string" && sql.trim() ? [sql] : [];
+  });
 }
 
 export function numericProbability(value: unknown): number | null {

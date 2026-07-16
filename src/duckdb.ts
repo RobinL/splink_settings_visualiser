@@ -209,6 +209,19 @@ function valuesForCandidate(
   };
 }
 
+export function valuesForColumnTypes(
+  values: PairValues,
+  columnTypes: Record<string, ColumnType>,
+): PairValues {
+  return Object.entries(columnTypes).reduce(
+    (current, [column, type]) =>
+      type.kind === "VARCHAR"
+        ? current
+        : valuesForCandidate(current, column, type.kind),
+    values,
+  );
+}
+
 async function queriesSucceed(
   connection: duckdb.AsyncDuckDBConnection,
   queries: string[],
@@ -448,6 +461,34 @@ function pairCte(
     ];
   });
   return `WITH pair AS (SELECT\n  ${pairColumns.join(",\n  ")}\n)`;
+}
+
+function recordCte(
+  alias: "l" | "r",
+  side: keyof PairValues,
+  columns: string[],
+  columnTypes: Record<string, ColumnType>,
+  values: PairValues,
+): string {
+  const projected = columns.map((column) => {
+    const type = columnTypes[column] ?? { kind: "VARCHAR" as const };
+    const raw = values[side][column] === undefined ? "" : values[side][column];
+    return `${typedLiteral(raw, type)} AS ${quoteIdentifier(column)}`;
+  });
+  return `${alias} AS (SELECT\n  ${projected.join(",\n  ")}\n)`;
+}
+
+export function buildBlockingRuleEvaluationSqls(
+  rules: string[],
+  columns: string[],
+  columnTypes: Record<string, ColumnType>,
+  values: PairValues,
+): string[] {
+  const records = `WITH ${recordCte("l", "left", columns, columnTypes, values)},\n${recordCte("r", "right", columns, columnTypes, values)}`;
+  return rules.map(
+    (rule) =>
+      `${records}\nSELECT COALESCE((${rule}), FALSE) AS function_value\nFROM l CROSS JOIN r`,
+  );
 }
 
 export function buildEvaluationSql(

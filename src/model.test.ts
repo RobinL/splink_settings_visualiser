@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildBlockingRuleEvaluationSqls,
   buildComparisonEvaluationSqls,
   buildEvaluationSql,
   buildFunctionEvaluationSqls,
   displayLiteral,
+  valuesForColumnTypes,
 } from "./duckdb";
 import {
+  blockingRuleSql,
   chartData,
   finalMatchWeight,
   matchWeight,
@@ -36,6 +39,20 @@ const model = parseModel({
 });
 
 describe("Splink model normalization", () => {
+  it("extracts string and serialized blocking rules", () => {
+    const withRules = parseModel({
+      ...model,
+      blocking_rules_to_generate_predictions: [
+        "l.name = r.name",
+        { blocking_rule: "l.postcode = r.postcode", sql_dialect: "duckdb" },
+      ],
+    });
+    expect(blockingRuleSql(withRules)).toEqual([
+      "l.name = r.name",
+      "l.postcode = r.postcode",
+    ]);
+  });
+
   it("reconstructs comparison vector values in Splink order", () => {
     expect(model.comparisons[0].comparison_levels.map((level) => level.comparison_vector_value)).toEqual([
       -1,
@@ -75,6 +92,38 @@ describe("Splink model normalization", () => {
 });
 
 describe("DuckDB evaluation SQL", () => {
+  it("evaluates each blocking rule against isolated l and r records", () => {
+    const [sql] = buildBlockingRuleEvaluationSqls(
+      ["l.name = r.name"],
+      ["name"],
+      { name: { kind: "VARCHAR" } },
+      { left: { name: "O'Brien" }, right: { name: "Robin" } },
+    );
+    expect(sql).toContain("WITH l AS (SELECT");
+    expect(sql).toContain("O''Brien");
+    expect(sql).toContain('AS "name"');
+    expect(sql).toContain("FROM l CROSS JOIN r");
+    expect(sql).toContain("COALESCE((l.name = r.name), FALSE)");
+  });
+
+  it("makes initial examples compatible with inferred non-text types", () => {
+    expect(
+      valuesForColumnTypes(
+        {
+          left: { surname: "Smith", postcode: "SW1A 1AA" },
+          right: { surname: "Smyth", postcode: "SW1A 1AB" },
+        },
+        {
+          surname: { kind: "VARCHAR" },
+          postcode: { kind: "DOUBLE" },
+        },
+      ),
+    ).toEqual({
+      left: { surname: "Smith", postcode: "42" },
+      right: { surname: "Smyth", postcode: "43" },
+    });
+  });
+
   it("formats pair values as copyable typed SQL literals", () => {
     expect(displayLiteral("O'Brien", { kind: "VARCHAR" })).toBe("'O''Brien'");
     expect(displayLiteral(null, { kind: "VARCHAR" })).toBe("NULL");

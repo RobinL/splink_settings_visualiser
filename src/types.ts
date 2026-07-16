@@ -19,11 +19,17 @@ export interface SplinkComparison {
   comparison_levels: SplinkComparisonLevel[];
 }
 
+export interface SplinkBlockingRule {
+  blocking_rule: string;
+  sql_dialect?: string;
+}
+
 export interface SplinkModel {
   sql_dialect?: string;
   link_type: string;
   probability_two_random_records_match: number;
   comparisons: SplinkComparison[];
+  blocking_rules_to_generate_predictions?: Array<SplinkBlockingRule | string>;
 }
 
 export interface NormalizedLevel extends SplinkComparisonLevel {
