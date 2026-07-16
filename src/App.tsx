@@ -253,7 +253,7 @@ function PairTable({
     <section className="content-band pair-table-editor">
       <div className="section-title">
         <div>
-          <h2>Records</h2>
+          <h2>Live editable records</h2>
         </div>
         <button className="secondary-button null-all-button" onClick={onSetAllNull}>
           Set everything to NULL
@@ -553,12 +553,12 @@ function EmptyState({
     <main className="welcome-shell">
       <header className="welcome-brand">
         <Database size={24} />
-        <span>Splink model visualiser</span>
+        <span>Live Splink model visualiser</span>
       </header>
       <section className="welcome-content">
         <div className="welcome-copy">
           <p className="eyebrow">DuckDB model inspector</p>
-          <h1>Splink model visualiser</h1>
+          <h1>Live Splink model visualiser</h1>
           <p>
             See what your linkage model has learned. Inspect its parameters,
             test record pairs, and trace every contribution to the final match score.
@@ -583,6 +583,10 @@ function EmptyState({
           <h2>Open a Splink model</h2>
           <p>
             Drop a <strong>model.json</strong> here, or choose how to load it.
+          </p>
+          <p className="drop-zone-description">
+            Convert Splink settings .json into a live, in browser Splink model
+            where you can input records and view match scores.
           </p>
           <div className="load-actions primary-load-actions">
             <button
@@ -971,7 +975,6 @@ export function App() {
         deferredValues,
         deferredDerivedColumns,
       );
-      setGammas(model.comparisons.map(() => null));
       setComparisonErrors({});
       setEngineError(undefined);
       setFunctionOutcomes(
@@ -1235,7 +1238,7 @@ export function App() {
       <header className="app-header">
         <div className="brand">
           <Database size={21} />
-          <span>Splink model visualiser</span>
+          <span>Live Splink model visualiser</span>
         </div>
         <div className="model-source">
           <FileJson size={15} />
@@ -1500,6 +1503,7 @@ export function App() {
                 <VegaChart
                   spec={waterfallChart}
                   label="Waterfall of pair match-weight contributions"
+                  className="waterfall-chart"
                 />
               </div>
             </details>

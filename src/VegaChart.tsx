@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import embed, { type VisualizationSpec } from "vega-embed";
 
-export function VegaChart({ spec, label }: { spec: VisualizationSpec; label: string }) {
+export function VegaChart({
+  spec,
+  label,
+  className,
+}: {
+  spec: VisualizationSpec;
+  label: string;
+  className?: string;
+}) {
   const target = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string>();
 
@@ -20,5 +28,12 @@ export function VegaChart({ spec, label }: { spec: VisualizationSpec; label: str
   }, [spec]);
 
   if (error) return <div className="inline-error">{error}</div>;
-  return <div ref={target} className="vega-chart" role="img" aria-label={label} />;
+  return (
+    <div
+      ref={target}
+      className={`vega-chart${className ? ` ${className}` : ""}`}
+      role="img"
+      aria-label={label}
+    />
+  );
 }

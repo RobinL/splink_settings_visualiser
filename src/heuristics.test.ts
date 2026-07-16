@@ -18,6 +18,13 @@ describe("record example heuristics", () => {
     ["event_date", ["1990-01-01", "1990-01-02"]],
     ["postcode_fake", ["SW1A 1AA", "SW1A 1AB"]],
     ["zip.code", ["10001", "10002"]],
+    ["town", ["London", "London"]],
+    ["home_town", ["London", "London"]],
+    ["city_name", ["London", "London"]],
+    ["email", ["john.smith@example.com", "john.smyth@example.com"]],
+    ["email_address", ["john.smith@example.com", "john.smyth@example.com"]],
+    ["e-mail", ["john.smith@example.com", "john.smyth@example.com"]],
+    ["primaryEmail", ["john.smith@example.com", "john.smyth@example.com"]],
     ["occupation", ["", ""]],
   ])("provides simple examples for %s", (column, expected) => {
     expect(exampleValuesForColumn(column)).toEqual(expected);

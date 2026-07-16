@@ -35,6 +35,11 @@ export function candidateKindsForColumn(column: string): ColumnKind[] {
 export function exampleValuesForColumn(column: string): [string, string] {
   const tokens = normalizeColumnName(column);
   const compact = tokens.join("");
+  const isTownOrCity = tokens.includes("town") || tokens.includes("city");
+  const isEmail =
+    tokens.includes("email") ||
+    compact.includes("email") ||
+    hasSequence(tokens, ["e", "mail"]);
   const isFirstName =
     tokens.includes("forename") ||
     compact === "firstname" ||
@@ -58,6 +63,8 @@ export function exampleValuesForColumn(column: string): [string, string] {
   if (isFirstName && isLastName) return ["John Smith", "Jon Smyth"];
   if (isFirstName) return ["John", "Jon"];
   if (isLastName) return ["Smith", "Smyth"];
+  if (isTownOrCity) return ["London", "London"];
+  if (isEmail) return ["john.smith@example.com", "john.smyth@example.com"];
   if (tokens.length === 1 && tokens[0] === "name") return ["John", "Jon"];
   return ["", ""];
 }

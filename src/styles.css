@@ -39,6 +39,7 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 .file-mark { width: 68px; height: 68px; display: grid; place-items: center; color: var(--green); background: var(--green-soft); border-radius: 50%; }
 .drop-zone h2 { margin: 23px 0 6px; font-size: 23px; }
 .drop-zone p { color: var(--muted); margin: 0 0 28px; }
+.drop-zone .drop-zone-description { max-width: 430px; margin-top: -16px; font-size: 13px; line-height: 1.5; }
 .load-actions, .modal-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .primary-load-actions { justify-content: center; }
 .drop-zone .example-load-label { width: 100%; margin: 20px 0 8px; color: var(--ink); text-align: left; font-size: 13px; font-weight: 600; }
@@ -103,6 +104,7 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 .model-summary pre { max-height: 300px; margin: 0; padding-left: 24px; overflow: auto; white-space: pre-wrap; border-left: 2px solid var(--gold); color: #4b4943; font-family: "IBM Plex Sans", sans-serif; font-size: 13px; line-height: 1.6; }
 .vega-chart { width: 100%; overflow-x: auto; }
 .vega-chart canvas { max-width: 100%; }
+.waterfall-chart { min-height: 500px; }
 .inline-error { padding: 14px; color: var(--red); background: var(--red-soft); }
 
 .pair-heading { align-items: center; }
