@@ -41,7 +41,8 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 .drop-zone p { color: var(--muted); margin: 0 0 28px; }
 .load-actions, .modal-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .primary-load-actions { justify-content: center; }
-.example-load-actions { width: max-content; max-width: 100%; margin-top: 12px; align-self: center; flex-direction: column; align-items: stretch; gap: 6px; }
+.drop-zone .example-load-label { width: 100%; margin: 20px 0 8px; color: var(--ink); text-align: left; font-size: 13px; font-weight: 600; }
+.example-load-actions { width: max-content; max-width: 100%; align-self: flex-start; flex-direction: column; align-items: stretch; gap: 6px; }
 .example-load-actions .secondary-button { min-height: 32px; padding: 0 10px; justify-content: flex-start; font-size: 12px; }
 .primary-button, .secondary-button { min-height: 40px; padding: 0 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; font-weight: 600; }
 .primary-button { background: var(--green); color: white; }

@@ -507,6 +507,7 @@ function EmptyState({
               Paste JSON
             </button>
           </div>
+          <p className="example-load-label">Or load an example</p>
           <div className="load-actions example-load-actions">
             <button
               className="secondary-button"
