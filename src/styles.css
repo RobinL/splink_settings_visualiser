@@ -640,48 +640,82 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
   font-size: 12px;
 }
 
+.record-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.metadata-columns-toggle {
+  margin-right: 4px;
+}
+
 .pair-record-table {
   width: 100%;
   min-width: 760px;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .pair-record-table th,
 .pair-record-table td {
-  padding: 8px;
-  border-right: 1px solid #e7e7e7;
-  vertical-align: top;
+  padding: 6px 12px;
+  background: #fff;
+  border-right: 1px solid #d8d8d8;
+  border-bottom: 1px solid #e7e7e7;
+  vertical-align: middle;
 }
 
-.pair-record-table th:first-child {
-  width: 18%;
+.pair-record-table .field-column {
+  width: 1%;
 }
 
-.pair-record-table th:nth-child(2),
-.pair-record-table th:nth-child(3) {
-  width: 31%;
+.pair-record-table .record-column {
+  width: 33%;
 }
 
-.pair-record-table th:last-child {
-  width: 20%;
+.pair-record-table.record-values-only .record-column {
+  width: 50%;
+}
+
+.pair-record-table .type-column {
+  width: 22%;
+}
+
+.pair-record-table thead th:first-child,
+.pair-record-table thead th:nth-child(2),
+.pair-record-table thead th:nth-child(3),
+.pair-record-table thead th:last-child {
+  width: auto;
 }
 
 .pair-record-table thead th {
+  padding-top: 6px;
+  padding-bottom: 7px;
   color: #3c3c3c;
   font-size: 12px;
 }
 
-.pair-record-table tbody tr {
+.pair-record-table tbody tr,
+.pair-record-table tbody tr:nth-child(even),
+.pair-record-table tbody tr:nth-child(odd) {
   background: #fff;
 }
 
 .pair-record-table tbody tr:hover {
-  background: #fffdbc;
+  background: #fafafa;
 }
 
 .pair-record-table tbody th {
-  background: #f5f5f5;
+  padding-left: 12px;
+  background: #fff;
   white-space: nowrap;
+}
+
+.pair-record-table th:last-child,
+.pair-record-table td:last-child {
+  border-right: 0;
 }
 
 .pair-record-table .cell-editor {

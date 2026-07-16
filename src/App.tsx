@@ -7,6 +7,7 @@ import {
   ClipboardPaste,
   Database,
   Download,
+  Eraser,
   FileJson,
   Gauge,
   Info,
@@ -228,6 +229,7 @@ function PairTable({
   onDerivedColumnChange,
   onTfAdjustmentChange,
   onSetAllNull,
+  onBlankAll,
 }: {
   columns: string[];
   columnTypes: Record<string, ColumnType>;
@@ -243,30 +245,68 @@ function PairTable({
   onDerivedColumnChange: (column: string, expression?: string) => void;
   onTfAdjustmentChange: (column: string, value: number) => void;
   onSetAllNull: () => void;
+  onBlankAll: () => void;
 }) {
   const [newDerivedColumn, setNewDerivedColumn] = useState("");
   const [newDerivedExpression, setNewDerivedExpression] = useState("");
+  const [showMetadataColumns, setShowMetadataColumns] = useState(true);
   const availableDerivedColumns = columns.filter(
     (column) => !(column in derivedColumns),
   );
+  const editableColumns = columns.filter(
+    (column) => !(column in derivedColumns),
+  );
+  const allValuesAreNull =
+    editableColumns.length > 0 &&
+    editableColumns.every((column) =>
+      (["left", "right"] as Side[]).every(
+        (side) => pairValue(values, side, column) === null,
+      ),
+    );
   return (
     <section className="content-band pair-table-editor">
       <div className="section-title">
         <div>
           <h2>Live editable records</h2>
         </div>
-        <button className="secondary-button null-all-button" onClick={onSetAllNull}>
-          Set everything to NULL
-        </button>
+        <div className="record-actions">
+          <label className="switch-control metadata-columns-toggle">
+            <span>Show field and data type</span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={showMetadataColumns}
+              onChange={(event) =>
+                setShowMetadataColumns(event.target.checked)
+              }
+            />
+            <span className="switch-track" aria-hidden="true" />
+          </label>
+          <button className="secondary-button null-all-button" onClick={onSetAllNull}>
+            {allValuesAreNull ? "Restore record values" : "Set everything to NULL"}
+          </button>
+          <button className="secondary-button null-all-button" onClick={onBlankAll}>
+            <Eraser size={15} />
+            Blank out all records
+          </button>
+        </div>
       </div>
       <div className="record-grid-wrap">
-        <table className="record-grid pair-record-table">
+        <table
+          className={`record-grid pair-record-table ${showMetadataColumns ? "" : "record-values-only"}`}
+        >
+          <colgroup>
+            {showMetadataColumns && <col className="field-column" />}
+            <col className="record-column" />
+            <col className="record-column" />
+            {showMetadataColumns && <col className="type-column" />}
+          </colgroup>
           <thead>
             <tr>
-              <th>Field</th>
+              {showMetadataColumns && <th>Field</th>}
               <th>Record L</th>
               <th>Record R</th>
-              <th>Data type</th>
+              {showMetadataColumns && <th>Data type</th>}
             </tr>
           </thead>
           <tbody>
@@ -277,7 +317,7 @@ function PairTable({
               const isDerived = column in derivedColumns;
               return (
                 <tr key={column}>
-                  <th>{column}</th>
+                  {showMetadataColumns && <th>{column}</th>}
                   {(["left", "right"] as Side[]).map((side) => (
                     <td key={side}>
                       {isDerived ? (
@@ -297,40 +337,42 @@ function PairTable({
                       )}
                     </td>
                   ))}
-                  <td>
-                    {isDerived ? (
-                      <span className="derived-type">Derived</span>
-                    ) : (
-                      <>
-                        <div className="type-select">
-                          <select
-                            aria-label={`${column} data type`}
-                            value={type.kind}
-                            onChange={(event) =>
-                              onTypeChange(column, event.target.value as ColumnKind)
-                            }
-                          >
-                            {TYPE_OPTIONS.map((option) => (
-                              <option value={option.value} key={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown size={14} />
-                        </div>
-                        {type.kind === "CUSTOM" && (
-                          <input
-                            className="custom-type"
-                            value={type.customType ?? ""}
-                            onChange={(event) =>
-                              onCustomTypeChange(column, event.target.value)
-                            }
-                            placeholder="STRUCT(city VARCHAR)"
-                          />
-                        )}
-                      </>
-                    )}
-                  </td>
+                  {showMetadataColumns && (
+                    <td>
+                      {isDerived ? (
+                        <span className="derived-type">Derived</span>
+                      ) : (
+                        <>
+                          <div className="type-select">
+                            <select
+                              aria-label={`${column} data type`}
+                              value={type.kind}
+                              onChange={(event) =>
+                                onTypeChange(column, event.target.value as ColumnKind)
+                              }
+                            >
+                              {TYPE_OPTIONS.map((option) => (
+                                <option value={option.value} key={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown size={14} />
+                          </div>
+                          {type.kind === "CUSTOM" && (
+                            <input
+                              className="custom-type"
+                              value={type.customType ?? ""}
+                              onChange={(event) =>
+                                onCustomTypeChange(column, event.target.value)
+                              }
+                              placeholder="STRUCT(city VARCHAR)"
+                            />
+                          )}
+                        </>
+                      )}
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -750,6 +792,7 @@ export function App() {
   const [derivedColumnError, setDerivedColumnError] = useState<string>();
   const [highlightActivatedWeights, setHighlightActivatedWeights] =
     useState(false);
+  const valuesBeforeAllNull = useRef<PairValues | null>(null);
 
   const deferredValues = useDeferredValue(values);
   const deferredTypes = useDeferredValue(columnTypes);
@@ -773,6 +816,7 @@ export function App() {
     setDisplayedExpressions({});
     setBlockingRuleOutcomes([]);
     setHighlightActivatedWeights(false);
+    valuesBeforeAllNull.current = null;
     setDerivedColumns(nextModel.example_data?.derived_columns ?? {});
     setDerivedColumnError(undefined);
     setTfAdjustments(
@@ -1183,6 +1227,7 @@ export function App() {
   const totalLevels = comparisonLevelData.length;
 
   const updateValue = (side: Side, column: string, value: string | null) => {
+    valuesBeforeAllNull.current = null;
     setValues((current) => ({
       ...current,
       [side]: { ...current[side], [column]: value },
@@ -1198,12 +1243,62 @@ export function App() {
     }));
   };
   const setEverythingNull = () => {
-    const nullValues = Object.fromEntries(
+    const editableColumns = columns.filter(
+      (column) => !(column in derivedColumns),
+    );
+    const allValuesAreNull = editableColumns.every((column) =>
+      (["left", "right"] as Side[]).every(
+        (side) => values[side][column] === null,
+      ),
+    );
+    if (allValuesAreNull) {
+      const previous = valuesBeforeAllNull.current;
+      valuesBeforeAllNull.current = null;
+      setValues((current) => ({
+        left: {
+          ...current.left,
+          ...Object.fromEntries(
+            editableColumns.map((column) => [
+              column,
+              previous?.left[column] ?? "",
+            ]),
+          ),
+        },
+        right: {
+          ...current.right,
+          ...Object.fromEntries(
+            editableColumns.map((column) => [
+              column,
+              previous?.right[column] ?? "",
+            ]),
+          ),
+        },
+      }));
+    } else {
+      valuesBeforeAllNull.current = {
+        left: { ...values.left },
+        right: { ...values.right },
+      };
+      const nullValues = Object.fromEntries(
+        editableColumns.map((column) => [column, null]),
+      );
+      setValues((current) => ({
+        left: { ...current.left, ...nullValues },
+        right: { ...current.right, ...nullValues },
+      }));
+    }
+  };
+  const blankEverything = () => {
+    valuesBeforeAllNull.current = null;
+    const blankValues = Object.fromEntries(
       columns
         .filter((column) => !(column in derivedColumns))
-        .map((column) => [column, null]),
+        .map((column) => [column, ""]),
     );
-    setValues({ left: { ...nullValues }, right: { ...nullValues } });
+    setValues((current) => ({
+      left: { ...current.left, ...blankValues },
+      right: { ...current.right, ...blankValues },
+    }));
   };
   const downloadSettings = async () => {
     setDownloading(true);
@@ -1375,60 +1470,6 @@ export function App() {
             </div>
             <pre>{humanReadableDescription(model)}</pre>
           </section>
-          <section className="content-band">
-            <div className="section-title">
-              <div>
-                <p className="eyebrow">Evidence strength</p>
-                <h2>Match weights</h2>
-                <p>
-                  Positive levels support a match; negative levels count against
-                  it.
-                </p>
-              </div>
-              <div className="match-weight-chart-controls">
-                <label className="switch-control">
-                  <span>Highlight activated match weights</span>
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    checked={highlightActivatedWeights}
-                    onChange={(event) =>
-                      setHighlightActivatedWeights(event.target.checked)
-                    }
-                  />
-                  <span className="switch-track" aria-hidden="true" />
-                </label>
-                <Gauge size={20} />
-              </div>
-            </div>
-            <VegaChart
-              spec={matchWeightsChart}
-              label="Match weights by comparison level"
-            />
-          </section>
-          <details className="content-band comparison-widget chart-disclosure">
-            <summary className="comparison-head">
-              <div>
-                <p className="eyebrow">Parameter balance</p>
-                <h2>m and u probabilities</h2>
-              </div>
-              <span className="comparison-expand-hint">
-                (<span className="expand-label">click to expand</span>
-                <span className="collapse-label">click to collapse</span>)
-                <ChevronDown size={17} />
-              </span>
-            </summary>
-            <div className="comparison-content">
-              <p className="chart-disclosure-description">
-                Compare how often each level appears among matches and
-                non-matches.
-              </p>
-              <VegaChart
-                spec={muChart}
-                label="M and U parameters by comparison level"
-              />
-            </div>
-          </details>
         </main>
       }
 
@@ -1489,6 +1530,7 @@ export function App() {
                 }))
               }
               onSetAllNull={setEverythingNull}
+              onBlankAll={blankEverything}
             />
           )}
           {hasCompleteResults && untrainedResults.length > 0 && (
@@ -1532,6 +1574,60 @@ export function App() {
               </div>
             </details>
           )}
+          <section className="content-band">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Evidence strength</p>
+                <h2>Match weights</h2>
+                <p>
+                  Positive levels support a match; negative levels count against
+                  it.
+                </p>
+              </div>
+              <div className="match-weight-chart-controls">
+                <label className="switch-control">
+                  <span>Highlight activated match weights</span>
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    checked={highlightActivatedWeights}
+                    onChange={(event) =>
+                      setHighlightActivatedWeights(event.target.checked)
+                    }
+                  />
+                  <span className="switch-track" aria-hidden="true" />
+                </label>
+                <Gauge size={20} />
+              </div>
+            </div>
+            <VegaChart
+              spec={matchWeightsChart}
+              label="Match weights by comparison level"
+            />
+          </section>
+          <details className="content-band comparison-widget chart-disclosure">
+            <summary className="comparison-head">
+              <div>
+                <p className="eyebrow">Parameter balance</p>
+                <h2>m and u probabilities</h2>
+              </div>
+              <span className="comparison-expand-hint">
+                (<span className="expand-label">click to expand</span>
+                <span className="collapse-label">click to collapse</span>)
+                <ChevronDown size={17} />
+              </span>
+            </summary>
+            <div className="comparison-content">
+              <p className="chart-disclosure-description">
+                Compare how often each level appears among matches and
+                non-matches.
+              </p>
+              <VegaChart
+                spec={muChart}
+                label="M and U parameters by comparison level"
+              />
+            </div>
+          </details>
           <section className="comparison-section">
             <div className="section-title">
               <div>
