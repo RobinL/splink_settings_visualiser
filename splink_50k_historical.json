@@ -4,6 +4,15 @@
     "retain_matching_columns": true,
     "retain_intermediate_calculation_columns": true,
     "additional_columns_to_retain": [],
+    "example_data": {
+        "version": 1,
+        "column_types": {},
+        "record_l": {},
+        "record_r": {},
+        "derived_columns": {
+            "first_name_surname_concat": "first_name || ' ' || surname"
+        }
+    },
     "sql_dialect": "duckdb",
     "linker_uid": "sio16xwd",
     "em_convergence": 0.0001,
