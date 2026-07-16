@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ClipboardPaste,
   Database,
+  Download,
   FileJson,
   Gauge,
   Info,
@@ -39,12 +40,14 @@ import {
   evaluateExpression,
   evaluatePair,
   inferColumnTypes,
+  serializeExampleData,
   substitutePairValues,
   valuesForColumnTypes,
 } from "./duckdb";
 import { examplePairValues } from "./heuristics";
 import {
   chartData,
+  editorStateFromExampleData,
   blockingRuleSql,
   finalMatchWeight,
   humanReadableDescription,
@@ -310,14 +313,12 @@ function PairPreview({ columns, values }: { columns: string[]; values: PairValue
         <table>
           <thead>
             <tr>
-              <th>Record</th>
               {columns.map((column) => <th key={column}>{column}</th>)}
             </tr>
           </thead>
           <tbody>
             {(["left", "right"] as Side[]).map((side) => (
-              <tr key={side}>
-                <th>{side === "left" ? "Record L" : "Record R"}</th>
+              <tr aria-label={side === "left" ? "Record L" : "Record R"} key={side}>
                 {columns.map((column) => (
                   <td key={column}>
                     <code>{pairValue(values, side, column) ?? "NULL"}</code>
@@ -496,6 +497,20 @@ function EmptyState({
               )}
               Load fake 1,000 example
             </button>
+            <button
+              className="secondary-button"
+              disabled={loadingExample !== undefined}
+              onClick={() =>
+                void loadExample("splink_fake_1000_with_example_data.json")
+              }
+            >
+              {loadingExample === "splink_fake_1000_with_example_data.json" ? (
+                <LoaderCircle className="spin" size={17} />
+              ) : (
+                <FileJson size={17} />
+              )}
+              Load fake 1,000 example with test data
+            </button>
           </div>
           <input
             ref={input}
@@ -592,6 +607,7 @@ export function App() {
   const [showActualValues, setShowActualValues] = useState(false);
   const [displayedExpressions, setDisplayedExpressions] = useState<Record<string, string>>({});
   const [blockingRuleOutcomes, setBlockingRuleOutcomes] = useState<BlockingRuleOutcome[]>([]);
+  const [downloading, setDownloading] = useState(false);
 
   const deferredValues = useDeferredValue(values);
   const deferredTypes = useDeferredValue(columnTypes);
@@ -629,14 +645,26 @@ export function App() {
       })
       .then(({ discovered, exampleValues, expressions, inferredTypes }) => {
         if (cancelled) return;
+        const resolvedTypes = Object.fromEntries(
+          discovered.map((column) => [
+            column,
+            model.example_data?.column_types[column] ?? inferredTypes[column],
+          ]),
+        );
         const compatibleValues = valuesForColumnTypes(
           exampleValues,
-          inferredTypes,
+          resolvedTypes,
+        );
+        const initialState = editorStateFromExampleData(
+          model.example_data,
+          discovered,
+          resolvedTypes,
+          compatibleValues,
         );
         setColumns(discovered);
         setFunctionExpressions(expressions);
-        setColumnTypes(inferredTypes);
-        setValues(compatibleValues);
+        setColumnTypes(initialState.columnTypes);
+        setValues(initialState.values);
         setEngineState("ready");
       })
       .catch((reason: unknown) => {
@@ -652,6 +680,26 @@ export function App() {
       cancelled = true;
     };
   }, [model]);
+
+  useEffect(() => {
+    if (!model || engineState !== "ready" || columns.length === 0) return;
+    let cancelled = false;
+    serializeExampleData(columns, deferredTypes, deferredValues)
+      .then((exampleData) => {
+        if (cancelled) return;
+        setRawModel((current) => {
+          const settings = JSON.parse(current) as Record<string, unknown>;
+          settings.example_data = exampleData;
+          return JSON.stringify(settings, null, 2);
+        });
+      })
+      .catch(() => {
+        // Keep the last valid example_data while the user is editing an invalid value.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [model, engineState, columns, deferredTypes, deferredValues]);
 
   const blockingRules = useMemo(
     () => (model ? blockingRuleSql(model) : []),
@@ -941,6 +989,36 @@ export function App() {
     const nullValues = Object.fromEntries(columns.map((column) => [column, null]));
     setValues({ left: { ...nullValues }, right: { ...nullValues } });
   };
+  const downloadSettings = async () => {
+    setDownloading(true);
+    try {
+      const exampleData = await serializeExampleData(columns, columnTypes, values);
+      const settings = JSON.parse(rawModel) as Record<string, unknown>;
+      settings.example_data = exampleData;
+      const serialized = JSON.stringify(settings, null, 2);
+      setRawModel(serialized);
+      const url = URL.createObjectURL(
+        new Blob([serialized], { type: "application/json" }),
+      );
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = sourceName.endsWith(".json")
+        ? sourceName
+        : "splink_model_with_example_data.json";
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (reason) {
+      setEngineError(
+        reason instanceof Error
+          ? reason.message
+          : "The settings could not be downloaded.",
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -953,6 +1031,18 @@ export function App() {
           <span>{sourceName}</span>
           <span className="duckdb-badge">DuckDB</span>
         </div>
+        <button
+          className="secondary-button small"
+          disabled={downloading || engineState !== "ready"}
+          onClick={() => void downloadSettings()}
+        >
+          {downloading ? (
+            <LoaderCircle className="spin" size={15} />
+          ) : (
+            <Download size={15} />
+          )}
+          <span>Download settings</span>
+        </button>
         <button
           className="secondary-button small"
           onClick={() => setModel(null)}

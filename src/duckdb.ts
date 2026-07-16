@@ -9,6 +9,7 @@ import type {
   NormalizedComparison,
   NormalizedModel,
   PairValues,
+  SplinkExampleData,
 } from "./types";
 import { candidateKindsForColumn, isDateLikeColumn } from "./heuristics";
 
@@ -552,6 +553,45 @@ export async function evaluateExpression(sql: string): Promise<unknown> {
     const row = result.toArray()[0] as Record<string, unknown> | undefined;
     if (!row) throw new Error("DuckDB returned no function result.");
     return row.function_value;
+  } finally {
+    await connection.close();
+  }
+}
+
+export async function serializeExampleData(
+  columns: string[],
+  columnTypes: Record<string, ColumnType>,
+  values: PairValues,
+): Promise<SplinkExampleData> {
+  const database = await getDatabase();
+  const connection = await database.connect();
+  try {
+    const jsonArguments = (suffix: "l" | "r") =>
+      columns
+        .flatMap((column) => [
+          quoteString(column),
+          quoteIdentifier(`${column}_${suffix}`),
+        ])
+        .join(", ");
+    const result = await connection.query(
+      `${pairCte(columns, columnTypes, values)}\nSELECT\n` +
+        `  CAST(json_object(${jsonArguments("l")}) AS VARCHAR) AS record_l,\n` +
+        `  CAST(json_object(${jsonArguments("r")}) AS VARCHAR) AS record_r\n` +
+        "FROM pair",
+    );
+    const row = result.toArray()[0] as Record<string, unknown> | undefined;
+    if (!row) throw new Error("DuckDB returned no example data.");
+    return {
+      version: 1,
+      column_types: Object.fromEntries(
+        columns.map((column) => [
+          column,
+          columnTypes[column] ?? { kind: "VARCHAR" as const },
+        ]),
+      ),
+      record_l: JSON.parse(String(row.record_l)) as Record<string, unknown>,
+      record_r: JSON.parse(String(row.record_r)) as Record<string, unknown>,
+    };
   } finally {
     await connection.close();
   }

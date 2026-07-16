@@ -10,6 +10,7 @@ import {
 import {
   blockingRuleSql,
   chartData,
+  editorStateFromExampleData,
   finalMatchWeight,
   matchWeight,
   parseModel,
@@ -39,6 +40,54 @@ const model = parseModel({
 });
 
 describe("Splink model normalization", () => {
+  it("validates and hydrates typed example data", () => {
+    const withExamples = parseModel({
+      ...model,
+      example_data: {
+        version: 1,
+        column_types: {
+          name: { kind: "VARCHAR" },
+          score: { kind: "DOUBLE" },
+          tags: { kind: "VARCHAR[]" },
+        },
+        record_l: { name: "O'Brien", score: 42.5, tags: ["a", "b"] },
+        record_r: { name: null, score: 41, tags: ["c"] },
+      },
+    });
+    expect(
+      editorStateFromExampleData(
+        withExamples.example_data,
+        ["name", "score", "tags"],
+        {},
+        { left: {}, right: {} },
+      ),
+    ).toEqual({
+      columnTypes: {
+        name: { kind: "VARCHAR" },
+        score: { kind: "DOUBLE" },
+        tags: { kind: "VARCHAR[]" },
+      },
+      values: {
+        left: { name: "O'Brien", score: "42.5", tags: '["a","b"]' },
+        right: { name: null, score: "41", tags: '["c"]' },
+      },
+    });
+  });
+
+  it("rejects invalid example data column types", () => {
+    expect(() =>
+      parseModel({
+        ...model,
+        example_data: {
+          version: 1,
+          column_types: { name: { kind: "INTEGER" } },
+          record_l: {},
+          record_r: {},
+        },
+      }),
+    ).toThrow("example_data has an invalid type for 'name'");
+  });
+
   it("extracts string and serialized blocking rules", () => {
     const withRules = parseModel({
       ...model,

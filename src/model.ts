@@ -1,14 +1,47 @@
 import type {
   ChartDatum,
+  ColumnKind,
+  ColumnType,
   ComparisonResult,
   NormalizedComparison,
   NormalizedLevel,
   NormalizedModel,
+  PairValues,
+  SplinkExampleData,
   SplinkModel,
 } from "./types";
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const COLUMN_KINDS = new Set<ColumnKind>([
+  "VARCHAR",
+  "DOUBLE",
+  "BOOLEAN",
+  "DATE",
+  "TIMESTAMP",
+  "VARCHAR[]",
+  "DOUBLE[]",
+  "JSON",
+  "CUSTOM",
+]);
+
+function validateExampleData(value: unknown): asserts value is SplinkExampleData {
+  if (!isObject(value) || value.version !== 1) {
+    throw new Error("example_data must be a version 1 object.");
+  }
+  if (!isObject(value.column_types) || !isObject(value.record_l) || !isObject(value.record_r)) {
+    throw new Error("example_data must contain column_types, record_l, and record_r objects.");
+  }
+  for (const [column, type] of Object.entries(value.column_types)) {
+    if (!isObject(type) || !COLUMN_KINDS.has(type.kind as ColumnKind)) {
+      throw new Error(`example_data has an invalid type for '${column}'.`);
+    }
+    if (type.kind === "CUSTOM" && typeof type.customType !== "string") {
+      throw new Error(`example_data custom type '${column}' requires customType.`);
+    }
+  }
+}
 
 export function parseModel(value: unknown): NormalizedModel {
   if (!isObject(value)) throw new Error("The model must be a JSON object.");
@@ -24,6 +57,7 @@ export function parseModel(value: unknown): NormalizedModel {
   }
 
   const model = value as unknown as SplinkModel;
+  if (model.example_data !== undefined) validateExampleData(model.example_data);
   if (
     model.blocking_rules_to_generate_predictions !== undefined &&
     !Array.isArray(model.blocking_rules_to_generate_predictions)
@@ -57,6 +91,50 @@ export function blockingRuleSql(model: NormalizedModel): string[] {
     const sql = typeof rule === "string" ? rule : rule.blocking_rule;
     return typeof sql === "string" && sql.trim() ? [sql] : [];
   });
+}
+
+function editorValue(value: unknown, type: ColumnType): string | null {
+  if (value === null) return null;
+  if (
+    type.kind === "VARCHAR" ||
+    type.kind === "DOUBLE" ||
+    type.kind === "DATE" ||
+    type.kind === "TIMESTAMP"
+  ) {
+    return String(value);
+  }
+  if (type.kind === "BOOLEAN") return String(value).toLowerCase();
+  return JSON.stringify(value);
+}
+
+export function editorStateFromExampleData(
+  exampleData: SplinkExampleData | undefined,
+  columns: string[],
+  fallbackTypes: Record<string, ColumnType>,
+  fallbackValues: PairValues,
+): { columnTypes: Record<string, ColumnType>; values: PairValues } {
+  if (!exampleData) return { columnTypes: fallbackTypes, values: fallbackValues };
+  const columnTypes = Object.fromEntries(
+    columns.map((column) => [
+      column,
+      exampleData.column_types[column] ?? fallbackTypes[column] ?? { kind: "VARCHAR" },
+    ]),
+  );
+  const values: PairValues = {
+    left: { ...fallbackValues.left },
+    right: { ...fallbackValues.right },
+  };
+  for (const [side, record] of [
+    ["left", exampleData.record_l],
+    ["right", exampleData.record_r],
+  ] as const) {
+    for (const column of columns) {
+      if (Object.prototype.hasOwnProperty.call(record, column)) {
+        values[side][column] = editorValue(record[column], columnTypes[column]);
+      }
+    }
+  }
+  return { columnTypes, values };
 }
 
 export function numericProbability(value: unknown): number | null {

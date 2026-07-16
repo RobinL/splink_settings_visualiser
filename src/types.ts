@@ -30,6 +30,7 @@ export interface SplinkModel {
   probability_two_random_records_match: number;
   comparisons: SplinkComparison[];
   blocking_rules_to_generate_predictions?: Array<SplinkBlockingRule | string>;
+  example_data?: SplinkExampleData;
 }
 
 export interface NormalizedLevel extends SplinkComparisonLevel {
@@ -59,6 +60,13 @@ export type ColumnKind =
 export interface ColumnType {
   kind: ColumnKind;
   customType?: string;
+}
+
+export interface SplinkExampleData {
+  version: 1;
+  column_types: Record<string, ColumnType>;
+  record_l: Record<string, unknown>;
+  record_r: Record<string, unknown>;
 }
 
 export interface PairValues {
