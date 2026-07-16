@@ -217,11 +217,13 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 .level-details summary { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .level-details[open] summary svg, .sql-panel[open] summary > svg { transform: rotate(180deg); }
 .level-details > div { margin-top: 10px; border-top: 1px solid var(--line); }
-.level-details > div > div { padding: 9px 6px; display: grid; grid-template-columns: minmax(100px, .8fr) minmax(0, 1.5fr) auto; gap: 10px; align-items: center; border-bottom: 1px solid #e9e6df; font-size: 10px; }
+.level-details > div > div { padding: 9px 6px; display: grid; grid-template-columns: minmax(100px, .8fr) minmax(0, 1.5fr) 56px 84px; gap: 10px; align-items: center; border-bottom: 1px solid #e9e6df; font-size: 10px; }
+.level-details > div > div.level-details-header { padding-top: 6px; padding-bottom: 6px; color: var(--muted); font-size: 9px; font-weight: 600; }
 .level-details > div > div.selected { background: var(--green-soft); }
 .level-details span { display: flex; align-items: center; gap: 5px; }
 .level-details code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .level-details strong { font-family: "IBM Plex Mono", monospace; }
+.level-details .level-number { justify-content: flex-end; text-align: right; font-variant-numeric: tabular-nums; }
 .sql-panel { margin-top: 24px; border: 1px solid var(--line); background: #202c35; color: #f6f3eb; border-radius: 5px; }
 .sql-panel summary { padding: 14px 17px; display: flex; justify-content: space-between; align-items: center; }
 .sql-panel summary span { display: flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 600; }
@@ -267,7 +269,8 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
   .level-result { max-width: 50%; }
   .tf-inputs { margin-left: -14px; margin-right: -14px; padding-left: 14px; padding-right: 14px; grid-template-columns: 1fr 1fr; }
   .tf-inputs > div { grid-column: 1 / -1; }
-  .level-details > div > div { grid-template-columns: 1fr auto; }
+  .level-details > div > div { grid-template-columns: 1fr auto auto; }
+  .level-details > div > div.level-details-header { display: none; }
   .level-details code { grid-column: 1 / -1; grid-row: 2; }
   .modal { padding: 20px; }
   .modal > textarea { min-height: 300px; }
@@ -724,6 +727,13 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
   margin-top: 12px;
 }
 
+.tf-adjustments-heading {
+  padding: 12px 8px 0;
+  color: #000;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .derived-record-value {
   min-height: 32px;
   padding: 7px 8px;
@@ -1071,29 +1081,30 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 }
 
 .tf-adjustment-slider {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 180px) minmax(0, 320px) max-content;
+  align-items: center;
+  gap: 12px;
   margin: 0;
-  padding: 12px 8px 4px;
+  padding: 12px 8px;
   border-top: 1px solid #e7e7e7;
 }
 
-.tf-adjustment-slider > span {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+.tf-adjustment-slider code {
   color: #000;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .tf-adjustment-slider output {
   font-family: "IBM Plex Mono", monospace;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .tf-adjustment-slider input {
   width: 100%;
-  margin: 9px 0 0;
+  margin: 0;
   accent-color: var(--green);
 }
 
@@ -1101,6 +1112,42 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
   margin-top: 18px;
   padding-top: 18px;
   border-top: 1px solid #e7e7e7;
+}
+
+.comparison-sql {
+  margin-top: 18px;
+  border-top: 1px solid #e7e7e7;
+}
+
+.comparison-sql summary {
+  padding: 12px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #555;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.comparison-sql summary::-webkit-details-marker {
+  display: none;
+}
+
+.comparison-sql[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.comparison-sql pre {
+  margin: 0 0 12px;
+  padding: 12px;
+  overflow-x: auto;
+  color: #333;
+  background: #f5f5f5;
+  border: 1px solid #e1e1e1;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .blocking-rules-section {

@@ -99,6 +99,17 @@ function activatedLevelSql(condition: string, matchWeight: number | null): strin
     : `WHEN ${condition} THEN ${weight}`;
 }
 
+function comparisonCaseSql(
+  comparison: NormalizedModel["comparisons"][number],
+): string {
+  const clauses = comparison.comparison_levels.map((level) =>
+    /^\s*else\s*$/i.test(level.sql_condition)
+      ? `  ELSE ${level.comparison_vector_value}`
+      : `  WHEN ${level.sql_condition} THEN ${level.comparison_vector_value}`,
+  );
+  return `CASE\n${clauses.join("\n")}\nEND`;
+}
+
 function pairValue(
   values: PairValues,
   side: Side,
@@ -381,17 +392,12 @@ function PairTable({
       </div>
       {tfAdjustmentColumns.length > 0 && (
         <div className="record-tf-adjustments">
+          <div className="tf-adjustments-heading">
+            Term frequency adjustments (specified as match weight adjustment)
+          </div>
           {tfAdjustmentColumns.map((column) => (
             <label className="tf-adjustment-slider" key={column}>
-              <span>
-                <span>
-                  <code>{column}</code> term frequency adjustment (match weight)
-                </span>
-                <output>
-                  {(tfAdjustments[column] ?? 1) >= 0 ? "+" : ""}
-                  {(tfAdjustments[column] ?? 1).toFixed(1)}
-                </output>
-              </span>
+              <code>{column}</code>
               <input
                 aria-label={`${column} term frequency adjustment`}
                 type="range"
@@ -403,6 +409,10 @@ function PairTable({
                   onTfAdjustmentChange(column, Number(event.target.value))
                 }
               />
+              <output>
+                {(tfAdjustments[column] ?? 1) >= 0 ? "+" : ""}
+                {(tfAdjustments[column] ?? 1).toFixed(1)}
+              </output>
             </label>
           ))}
         </div>
@@ -791,7 +801,7 @@ export function App() {
   const [derivedColumns, setDerivedColumns] = useState<Record<string, string>>({});
   const [derivedColumnError, setDerivedColumnError] = useState<string>();
   const [highlightActivatedWeights, setHighlightActivatedWeights] =
-    useState(false);
+    useState(true);
   const valuesBeforeAllNull = useRef<PairValues | null>(null);
 
   const deferredValues = useDeferredValue(values);
@@ -815,7 +825,7 @@ export function App() {
     setShowActualValues(false);
     setDisplayedExpressions({});
     setBlockingRuleOutcomes([]);
-    setHighlightActivatedWeights(false);
+    setHighlightActivatedWeights(true);
     valuesBeforeAllNull.current = null;
     setDerivedColumns(nextModel.example_data?.derived_columns ?? {});
     setDerivedColumnError(undefined);
@@ -1633,7 +1643,7 @@ export function App() {
             <div className="section-title">
               <div>
                 <p className="eyebrow">Level evaluator</p>
-                <h2>Comparison outcomes</h2>
+                <h2>Comparison Level Activations</h2>
                 <p className="outcomes-note">Read-only results. Edit values and data types in Records above.</p>
               </div>
               <div className="expression-mode" role="group" aria-label="SQL expression display">
@@ -1700,28 +1710,51 @@ export function App() {
                       <section className="level-details">
                         <h4>Comparison levels</h4>
                         <div>
-                          {comparison.comparison_levels.map((level) => (
-                            <div
-                              className={
-                                result?.gamma === level.comparison_vector_value
-                                  ? "selected"
-                                  : ""
-                              }
-                              key={`${level.comparison_vector_value}-${level.sql_condition}`}
-                            >
-                              <span>
-                                {result?.gamma ===
-                                  level.comparison_vector_value && (
-                                  <Check size={14} />
-                                )}
-                                {level.label_for_charts}
-                              </span>
-                              <code>{level.sql_condition}</code>
-                              <strong>γ {level.comparison_vector_value}</strong>
-                            </div>
-                          ))}
+                          <div className="level-details-header">
+                            <span>Level</span>
+                            <span>SQL condition</span>
+                            <span className="level-number">Gamma</span>
+                            <span className="level-number">Match weight</span>
+                          </div>
+                          {comparison.comparison_levels.map((level) => {
+                            const levelWeight = matchWeight(level);
+                            return (
+                              <div
+                                className={
+                                  result?.gamma === level.comparison_vector_value
+                                    ? "selected"
+                                    : ""
+                                }
+                                key={`${level.comparison_vector_value}-${level.sql_condition}`}
+                              >
+                                <span>
+                                  {result?.gamma ===
+                                    level.comparison_vector_value && (
+                                    <Check size={14} />
+                                  )}
+                                  {level.label_for_charts}
+                                </span>
+                                <code>{level.sql_condition}</code>
+                                <strong className="level-number">
+                                  {level.comparison_vector_value}
+                                </strong>
+                                <strong className="level-number">
+                                  {levelWeight === null
+                                    ? "N/A"
+                                    : `${levelWeight >= 0 ? "+" : ""}${levelWeight.toFixed(2)}`}
+                                </strong>
+                              </div>
+                            );
+                          })}
                         </div>
                       </section>
+                      <details className="comparison-sql">
+                        <summary>
+                          <span>SQL CASE statement</span>
+                          <ChevronDown size={16} />
+                        </summary>
+                        <pre>{comparisonCaseSql(comparison)}</pre>
+                      </details>
                     </div>
                   </details>
                 );
