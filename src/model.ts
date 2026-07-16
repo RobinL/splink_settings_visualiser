@@ -41,6 +41,16 @@ function validateExampleData(value: unknown): asserts value is SplinkExampleData
       throw new Error(`example_data custom type '${column}' requires customType.`);
     }
   }
+  if (value.term_frequency_adjustments !== undefined) {
+    if (!isObject(value.term_frequency_adjustments)) {
+      throw new Error("example_data term_frequency_adjustments must be an object.");
+    }
+    for (const [comparison, adjustment] of Object.entries(value.term_frequency_adjustments)) {
+      if (typeof adjustment !== "number" || !Number.isFinite(adjustment)) {
+        throw new Error(`example_data has an invalid TF adjustment for '${comparison}'.`);
+      }
+    }
+  }
 }
 
 export function parseModel(value: unknown): NormalizedModel {

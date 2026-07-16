@@ -253,7 +253,7 @@ export async function discoverColumns(model: NormalizedModel): Promise<string[]>
         if (level.tf_adjustment_column) columns.push(level.tf_adjustment_column);
       });
     });
-    return [...new Set(columns)].sort((left, right) => left.localeCompare(right));
+    return [...new Set(columns)];
   } finally {
     await connection.close();
   }

@@ -53,7 +53,6 @@ import {
   humanReadableDescription,
   matchWeight,
   parseModel,
-  termFrequencyAdjustment,
 } from "./model";
 import type {
   ColumnKind,
@@ -458,7 +457,7 @@ function EmptyState({
           <p>
             Drop a <strong>model.json</strong> here, or choose how to load it.
           </p>
-          <div className="load-actions">
+          <div className="load-actions primary-load-actions">
             <button
               className="primary-button"
               onClick={() => input.current?.click()}
@@ -473,6 +472,8 @@ function EmptyState({
               <ClipboardPaste size={17} />
               Paste JSON
             </button>
+          </div>
+          <div className="load-actions example-load-actions">
             <button
               className="secondary-button"
               disabled={loadingExample !== undefined}
@@ -608,6 +609,7 @@ export function App() {
   const [displayedExpressions, setDisplayedExpressions] = useState<Record<string, string>>({});
   const [blockingRuleOutcomes, setBlockingRuleOutcomes] = useState<BlockingRuleOutcome[]>([]);
   const [downloading, setDownloading] = useState(false);
+  const [tfAdjustments, setTfAdjustments] = useState<Record<string, number>>({});
 
   const deferredValues = useDeferredValue(values);
   const deferredTypes = useDeferredValue(columnTypes);
@@ -628,6 +630,20 @@ export function App() {
     setShowActualValues(false);
     setDisplayedExpressions({});
     setBlockingRuleOutcomes([]);
+    setTfAdjustments(
+      Object.fromEntries(
+        nextModel.comparisons
+          .filter((comparison) =>
+            comparison.comparison_levels.some((level) => level.tf_adjustment_column),
+          )
+          .map((comparison) => [
+            comparison.output_column_name,
+            nextModel.example_data?.term_frequency_adjustments?.[
+              comparison.output_column_name
+            ] ?? 1,
+          ]),
+      ),
+    );
   };
 
   useEffect(() => {
@@ -689,7 +705,10 @@ export function App() {
         if (cancelled) return;
         setRawModel((current) => {
           const settings = JSON.parse(current) as Record<string, unknown>;
-          settings.example_data = exampleData;
+          settings.example_data = {
+            ...exampleData,
+            term_frequency_adjustments: tfAdjustments,
+          };
           return JSON.stringify(settings, null, 2);
         });
       })
@@ -699,7 +718,14 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [model, engineState, columns, deferredTypes, deferredValues]);
+  }, [
+    model,
+    engineState,
+    columns,
+    deferredTypes,
+    deferredValues,
+    tfAdjustments,
+  ]);
 
   const blockingRules = useMemo(
     () => (model ? blockingRuleSql(model) : []),
@@ -886,10 +912,12 @@ export function App() {
         gamma,
         level,
         matchWeight: matchWeight(level),
-        tfAdjustment: termFrequencyAdjustment(comparison, level, null, null),
+        tfAdjustment: level.tf_adjustment_column
+          ? (tfAdjustments[comparison.output_column_name] ?? 1)
+          : 0,
       };
     });
-  }, [model, gammas]);
+  }, [model, gammas, tfAdjustments]);
 
   useEffect(() => {
     if (!showActualValues) {
@@ -994,7 +1022,10 @@ export function App() {
     try {
       const exampleData = await serializeExampleData(columns, columnTypes, values);
       const settings = JSON.parse(rawModel) as Record<string, unknown>;
-      settings.example_data = exampleData;
+      settings.example_data = {
+        ...exampleData,
+        term_frequency_adjustments: tfAdjustments,
+      };
       const serialized = JSON.stringify(settings, null, 2);
       setRawModel(serialized);
       const url = URL.createObjectURL(
@@ -1041,7 +1072,7 @@ export function App() {
           ) : (
             <Download size={15} />
           )}
-          <span>Download settings</span>
+          <span>Download settings with this test data</span>
         </button>
         <button
           className="secondary-button small"
@@ -1304,6 +1335,35 @@ export function App() {
                           </div>
                         )}
                       </div>
+                      {comparison.comparison_levels.some(
+                        (level) => level.tf_adjustment_column,
+                      ) && (
+                        <label className="tf-adjustment-slider">
+                          <span>
+                            Term frequency adjustment (match weight)
+                            <output>
+                              {(tfAdjustments[comparison.output_column_name] ?? 1) >= 0
+                                ? "+"
+                                : ""}
+                              {(tfAdjustments[comparison.output_column_name] ?? 1).toFixed(1)}
+                            </output>
+                          </span>
+                          <input
+                            aria-label={`${comparison.output_column_name} term frequency adjustment`}
+                            type="range"
+                            min="-10"
+                            max="10"
+                            step="0.1"
+                            value={tfAdjustments[comparison.output_column_name] ?? 1}
+                            onChange={(event) =>
+                              setTfAdjustments((current) => ({
+                                ...current,
+                                [comparison.output_column_name]: Number(event.target.value),
+                              }))
+                            }
+                          />
+                        </label>
+                      )}
                       <FunctionValues
                         outcomes={functionOutcomes[index] ?? []}
                         displayedExpressions={displayedExpressions}

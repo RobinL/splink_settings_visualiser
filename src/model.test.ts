@@ -52,7 +52,11 @@ describe("Splink model normalization", () => {
         },
         record_l: { name: "O'Brien", score: 42.5, tags: ["a", "b"] },
         record_r: { name: null, score: 41, tags: ["c"] },
+        term_frequency_adjustments: { name: 1.5 },
       },
+    });
+    expect(withExamples.example_data?.term_frequency_adjustments).toEqual({
+      name: 1.5,
     });
     expect(
       editorStateFromExampleData(
@@ -86,6 +90,21 @@ describe("Splink model normalization", () => {
         },
       }),
     ).toThrow("example_data has an invalid type for 'name'");
+  });
+
+  it("rejects non-numeric example TF adjustments", () => {
+    expect(() =>
+      parseModel({
+        ...model,
+        example_data: {
+          version: 1,
+          column_types: {},
+          record_l: {},
+          record_r: {},
+          term_frequency_adjustments: { name: "high" },
+        },
+      }),
+    ).toThrow("example_data has an invalid TF adjustment for 'name'");
   });
 
   it("extracts string and serialized blocking rules", () => {

@@ -40,6 +40,9 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 .drop-zone h2 { margin: 23px 0 6px; font-size: 23px; }
 .drop-zone p { color: var(--muted); margin: 0 0 28px; }
 .load-actions, .modal-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.primary-load-actions { justify-content: center; }
+.example-load-actions { width: 100%; margin-top: 2px; justify-content: center; }
+.example-load-actions .secondary-button { min-height: 44px; padding: 0 20px; }
 .primary-button, .secondary-button { min-height: 40px; padding: 0 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; font-weight: 600; }
 .primary-button { background: var(--green); color: white; }
 .primary-button:hover { background: #10644c; }
@@ -769,6 +772,10 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
   border-radius: 5px;
 }
 
+.comparison-list .comparison-widget {
+  margin-bottom: 4px;
+}
+
 .comparison-widget[open] {
   border-color: #bcbcbc;
   box-shadow: 0 2px 8px rgb(0 0 0 / 7%);
@@ -832,6 +839,33 @@ code, pre, textarea { font-family: "IBM Plex Mono", monospace; }
 
 .comparison-content {
   padding: 18px 16px 20px;
+}
+
+.tf-adjustment-slider {
+  display: block;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e7e7e7;
+}
+
+.tf-adjustment-slider > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #000;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tf-adjustment-slider output {
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+}
+
+.tf-adjustment-slider input {
+  width: 100%;
+  margin: 9px 0 0;
+  accent-color: var(--green);
 }
 
 .level-details {
