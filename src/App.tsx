@@ -374,7 +374,7 @@ function EmptyState({
   const [pasteValue, setPasteValue] = useState("");
   const [error, setError] = useState<string>();
   const [dragging, setDragging] = useState(false);
-  const [loadingExample, setLoadingExample] = useState(false);
+  const [loadingExample, setLoadingExample] = useState<string>();
 
   const ingest = (raw: string, name: string) => {
     try {
@@ -399,21 +399,21 @@ function EmptyState({
       );
     }
   };
-  const loadExample = async () => {
-    setLoadingExample(true);
+  const loadExample = async (name: string) => {
+    setLoadingExample(name);
     setError(undefined);
     try {
-      const response = await fetch(`${import.meta.env.BASE_URL}50k.json`);
-      if (!response.ok) throw new Error("The 50k example could not be loaded.");
-      ingest(await response.text(), "50k.json");
+      const response = await fetch(`${import.meta.env.BASE_URL}${name}`);
+      if (!response.ok) throw new Error(`The ${name} example could not be loaded.`);
+      ingest(await response.text(), name);
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "The 50k example could not be loaded.",
+          : `The ${name} example could not be loaded.`,
       );
     } finally {
-      setLoadingExample(false);
+      setLoadingExample(undefined);
     }
   };
   const drop = (event: DragEvent<HTMLDivElement>) => {
@@ -474,15 +474,27 @@ function EmptyState({
             </button>
             <button
               className="secondary-button"
-              disabled={loadingExample}
-              onClick={() => void loadExample()}
+              disabled={loadingExample !== undefined}
+              onClick={() => void loadExample("splink_50k_historical.json")}
             >
-              {loadingExample ? (
+              {loadingExample === "splink_50k_historical.json" ? (
                 <LoaderCircle className="spin" size={17} />
               ) : (
                 <FileJson size={17} />
               )}
-              Load 50k example
+              Load historical 50k example
+            </button>
+            <button
+              className="secondary-button"
+              disabled={loadingExample !== undefined}
+              onClick={() => void loadExample("splink_fake_1000.json")}
+            >
+              {loadingExample === "splink_fake_1000.json" ? (
+                <LoaderCircle className="spin" size={17} />
+              ) : (
+                <FileJson size={17} />
+              )}
+              Load fake 1,000 example
             </button>
           </div>
           <input
