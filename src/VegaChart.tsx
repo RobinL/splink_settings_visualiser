@@ -17,7 +17,11 @@ export function VegaChart({
     if (!target.current) return;
     let view: { finalize: () => void } | undefined;
     setError(undefined);
-    embed(target.current, spec, { actions: false, renderer: "canvas" })
+    embed(target.current, spec, {
+      actions: false,
+      renderer: "canvas",
+      ast: true,
+    })
       .then((result) => {
         view = result.view;
       })
